@@ -4,112 +4,135 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
+[![Status: early](https://img.shields.io/badge/status-early--slice-38bdf8.svg)](#-project-status)
 
 **Rigel** is a voice-activated, autonomous desktop agent designed to eliminate the friction of manual operating system navigation. Inspired by the fictional JARVIS AI system, Rigel combines a futuristic, holographic-style HUD visual interface with a powerful local execution engine.
 
-Instead of clicking through nested folders and menus, you look to your navigational anchor—**Rigel**—to instantly open applications, manage file structures, and execute local tasks entirely through natural language voice prompts.
+Instead of clicking through nested folders and menus, you look to your navigational anchor—**Rigel**—to instantly open applications, manage file structures, and execute local tasks entirely through natural language prompts.
 
 ---
 
 ## 🕶️ The Aesthetic & Concept
 
 * **The Navigational Anchor:** Named after the luminous blue supergiant star in the Orion constellation, Rigel acts as your bright guiding anchor through the massive ocean of your local computer files.
-* **The Blazing Blue HUD:** Features a high-contrast, glowing ice-blue visual interface. The central voice visualizer pulses like a distant star when idle and bursts into life upon hearing its wake word.
+* **The Blazing Blue HUD:** A high-contrast, glowing ice-blue interface. The central orb — a white-hot core wrapped in layered glow, expanding ripple rings, and orbiting satellites — breathes like a distant star when idle and spins up when it's working.
 
 ---
 
-## ⚡ Core Features
+## 🚦 Project Status
 
-* **🎙️ Voice-First Operating Layer:** Deep voice-recognition model optimized to catch its wake word (*"Rigel"*) even over background microphone noise.
-* **📁 Total File Manipulation:** Create, save, edit, read, and delete application files across your local hard drives purely via voice commands.
-* **⚙️ App Orchestration:** Launch, close, and tile applications simultaneously to instantly spin up customized developer or creative workspaces.
-* **🚀 Maximum Velocity Execution:** Uses direct system hooks to route tasks bypass standard GUI bottlenecks, executing your intentions at the "speed of sound."
+Rigel is in its **first slice**. What works today:
+
+* ✅ **Full-screen scalable orb** (Tauri + React) — the "blazing blue" presence, live and animating.
+* ✅ **Text conversation loop** — talk to Rigel by typing; the transcript rehydrates from Rigel's own store on launch.
+* ✅ **Logging from day one** — every conversation turn *and* every command Rigel attempts is written to a local SQLite store (`~/.rigel/rigel.db`).
+
+Deferred to later slices (scaffolded, not yet wired):
+
+* 🔜 **Voice I/O** — Rigel will get its own fresh STT/TTS pipeline.
+* 🔜 **Real command execution** — the OS-hook layer (open/close apps, file CRUD) runs behind approval gates. For now Rigel *detects and logs* command intents without executing them.
+* 🔜 **LLM brain** — the intent parser is a pluggable stub (`sidecar/brain.py`) with a clean seam for dropping in Claude.
 
 ---
 
 ## 🛠️ Architecture Overview
 
-Rigel runs quietly as a local background daemon, bridging natural language processing directly with low-level OS utilities.
+Rigel is a standalone **Tauri (Rust) + React** desktop app talking to a lean local **Python (FastAPI) sidecar**, which owns Rigel's private log/memory store. It reuses the visual and structural patterns of the OSA orb but shares no runtime or database with it.
 
 ```text
-                    [ USER VOICE PROMPT ]
-                             │
-                             ▼
-┌───────────────────────────────────────────────┐
-│         Rigel Voice Core (Wake Word)            │
-└───────────────────────┬─────────────────────────┘
-                        │
-                        ▼
-┌───────────────────────────────────────────────┐
-│        LLM Intent Parser & Router Engine        │
-└───────────────────────┬─────────────────────────┘
-                        │
-        ┌───────────────┴───────────────┐
-        ▼                               ▼
-┌───────────────────────┐   ┌───────────────────────┐
-│   File System Manager  │   │   OS Application Hook  │
-│     (CRUD Actions)     │   │   (Open/Close/Focus)   │
-└───────────────────────┘   └───────────────────────┘
+                    [ USER PROMPT (text · voice later) ]
+                                   │
+                                   ▼
+┌───────────────────────────────────────────────────────┐
+│   Rigel Desktop  —  Tauri shell + React orb (port 1425) │
+└───────────────────────────┬───────────────────────────┘
+                            │  HTTP  /api/rigel/*
+                            ▼
+┌───────────────────────────────────────────────────────┐
+│   Rigel Sidecar  —  FastAPI  (port 5131)                │
+│     • brain.py   → reply + command-intent parsing        │
+│     • db.py      → SQLite log/memory store               │
+└───────────────┬───────────────────────┬───────────────┘
+                ▼                       ▼
+     ┌───────────────────────┐   ┌───────────────────────┐
+     │  Conversation log     │   │  Command-attempt log  │
+     │  (every turn)         │   │  (every intent)       │
+     └───────────────────────┘   └───────────────────────┘
+                        ~/.rigel/rigel.db
 ```
 
 ---
 
-## 🚦 Quick Start
+## 🧰 Quick Start
 
 ### Prerequisites
-* Supported Platforms: Windows 11 / macOS Sequoia / Linux (X11/Wayland)
-* Python 3.11+
-* Active microphone input
+* **Node.js 18+** and npm
+* **Rust** (stable) + the [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS
+* **Python 3.11+**
+* Supported platforms: macOS / Windows 11 / Linux (X11/Wayland)
 
-### Installation
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/tseneadza/rigel.git
-   cd rigel
-   ```
+### 1. Clone
+```bash
+git clone https://github.com/tseneadza/rigel.git
+cd rigel
+```
 
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 2. Start the sidecar (terminal 1)
+```bash
+python3 -m venv .venv
+./.venv/bin/pip install -r sidecar/requirements.txt
+./.venv/bin/python -m sidecar          # serves http://127.0.0.1:5131
+```
 
-3. Initialize the core model and calibrate your microphone:
-   ```bash
-   python rigel.py --setup
-   ```
+### 3. Start the desktop app (terminal 2)
+```bash
+cd desktop
+npm install
+npm run dev            # web preview at http://localhost:1425
+# — or, for the native window —
+npm run tauri dev      # compiles the Tauri shell (first run is slow)
+```
 
-4. Boot up the HUD interface:
-   ```bash
-   python rigel.py --boot
-   ```
+The orb appears on launch. Type to Rigel; every turn and every detected command lands in `~/.rigel/rigel.db`.
 
 ---
 
 ## 🗣️ Interactive Syntax Examples
 
-Once the HUD initializes and displays the glowing blue anchor ring, trigger the agent using its wake word:
+Once the orb is up, talk to Rigel (voice arrives in a later slice):
 
-> **User:** *"Rigel, initialize workspace."*
+> **User:** *"Rigel, open VS Code and Chrome side-by-side."*
 >
-> **Rigel:** *(Visualizer spins rapidly)* `"System localized, sir. All core applications are online and files are synched. What is our next objective?"`
+> **Rigel:** *"Understood. I would open app — but command execution is not wired up yet, so I've logged the intent instead. What's next?"*
 
-### Application Control
-* *"Rigel, open VS Code and Chrome side-by-side."*
-* *"Rigel, terminate all background creative apps."*
+Inspect what Rigel has logged at any time:
+```bash
+curl http://127.0.0.1:5131/api/rigel/logs | python3 -m json.tool
+```
 
-### File Management
-* *"Rigel, create a new markdown file in my Documents folder named project_notes."*
-* *"Rigel, append the text 'Review structural code tonight' to my active todo list."*
-* *"Rigel, delete the temporary log files from yesterday morning."*
+---
+
+## 🗂️ Repository Layout
+
+```
+rigel/
+├── desktop/          Tauri + React front end (the orb & console)
+│   ├── src/          React components (RigelOrb, ChatConsole, App)
+│   └── src-tauri/    Rust/Tauri native shell
+└── sidecar/          Python FastAPI service
+    ├── app.py        routes: /chat /state /logs /health
+    ├── brain.py      reply + command-intent parser (LLM seam)
+    └── db.py         SQLite log/memory store
+```
 
 ---
 
 ## 🤝 Contributing
 
-Contributions to Rigel are welcome! Whether you are optimizing the voice recognition pipeline, adding support for new operating system hooks, or refining the glowing HUD UI animations, please feel free to fork the repo and submit a Pull Request.
+Contributions to Rigel are welcome — whether you're building the voice pipeline, wiring the OS-hook execution layer behind approval gates, dropping a real LLM into `brain.py`, or refining the HUD. Fork the repo and open a Pull Request.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.

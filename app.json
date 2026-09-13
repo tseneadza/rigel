@@ -1,0 +1,38 @@
+{
+  "id": "rigel",
+  "name": "Rigel",
+  "description": "Voice-activated, autonomous desktop agent with a JARVIS-style holographic HUD orb. Tauri + React front end over a local FastAPI sidecar with its own SQLite conversation/command log.",
+  "version": "0.1.0",
+  "type": "desktop",
+  "icon": "🌌",
+  "category": "productivity",
+  "web": {
+    "enabled": true,
+    "entry": "sidecar/app.py",
+    "port": 5131,
+    "framework": "fastapi",
+    "requirements": "sidecar/requirements.txt",
+    "venv": ".venv",
+    "command": [
+      ".venv/bin/python",
+      "-m",
+      "sidecar"
+    ]
+  },
+  "desktop": {
+    "enabled": true,
+    "framework": "tauri",
+    "dir": "desktop",
+    "dev": "npm run tauri dev",
+    "build": "npm run tauri build"
+  },
+  "tags": [
+    "rigel",
+    "voice",
+    "agent",
+    "desktop",
+    "orb",
+    "jarvis",
+    "tauri"
+  ]
+}

@@ -1,0 +1,221 @@
+:root {
+  --bg: #04070f;
+  --bg-2: #060c1a;
+  --ice: 120, 200, 255;      /* Rigel's blazing ice-blue, "r,g,b" */
+  --text: #dCEBff;
+  --text-dim: #7f93b3;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; }
+
+body {
+  background:
+    radial-gradient(1200px 800px at 50% 30%, var(--bg-2), var(--bg) 70%);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  overflow: hidden;
+}
+
+/* ── layout ─────────────────────────────────────────────────────────────── */
+.app-shell {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+
+.brandline {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 20px 28px;
+  letter-spacing: 0.35em;
+}
+.brand {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 15px;
+  color: rgb(var(--ice));
+  text-shadow: 0 0 18px rgba(var(--ice), 0.7);
+}
+.brand-sub {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.stage {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+}
+
+.dock {
+  padding: 0 24px 26px;
+  display: grid;
+  place-items: center;
+}
+
+/* ── the orb ────────────────────────────────────────────────────────────── */
+.rigel-orb {
+  --orb: var(--ice);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 26px;
+  user-select: none;
+}
+.rigel-orb[data-state="thinking"] { --orb: 90, 170, 255; }
+.rigel-orb[data-state="speaking"] { --orb: 150, 225, 255; }
+
+.orb-stage {
+  position: relative;
+  width: min(64vmin, 620px);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+}
+
+.orb-glow {
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%,
+    rgba(var(--orb), 0.55) 0%,
+    rgba(var(--orb), 0.18) 42%,
+    transparent 70%);
+  filter: blur(6px);
+  animation: breathe 5.5s ease-in-out infinite;
+}
+
+.orb-core {
+  position: absolute;
+  width: 34%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 42% 38%,
+    #ffffff 0%,
+    rgba(var(--orb), 0.95) 38%,
+    rgba(var(--orb), 0.55) 70%,
+    transparent 100%);
+  box-shadow:
+    0 0 40px rgba(var(--orb), 0.9),
+    0 0 120px rgba(var(--orb), 0.5);
+  animation: breathe 5.5s ease-in-out infinite;
+}
+
+.orb-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(var(--orb), 0.35);
+  animation: ripple 5s ease-out infinite;
+}
+.orb-ring--1 { width: 46%; aspect-ratio: 1; animation-delay: 0s; }
+.orb-ring--2 { width: 46%; aspect-ratio: 1; animation-delay: 1.6s; }
+.orb-ring--3 { width: 46%; aspect-ratio: 1; animation-delay: 3.2s; }
+
+.orb-satellites {
+  position: absolute;
+  width: 78%;
+  aspect-ratio: 1;
+  animation: orbit 18s linear infinite;
+}
+.rigel-orb[data-state="thinking"] .orb-satellites { animation-duration: 5s; }
+.orb-satellites i {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgb(var(--orb));
+  box-shadow: 0 0 12px rgba(var(--orb), 0.9);
+  top: 50%; left: 50%;
+}
+.orb-satellites i:nth-child(1) { transform: rotate(0deg) translateX(min(30vmin, 300px)); }
+.orb-satellites i:nth-child(2) { transform: rotate(130deg) translateX(min(30vmin, 300px)); }
+.orb-satellites i:nth-child(3) { transform: rotate(245deg) translateX(min(30vmin, 300px)); }
+
+.orb-caption {
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1);    opacity: 0.92; }
+  50%      { transform: scale(1.06); opacity: 1;    }
+}
+@keyframes ripple {
+  0%   { transform: scale(1);   opacity: 0.6; }
+  100% { transform: scale(2.1); opacity: 0;   }
+}
+@keyframes orbit {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orb-glow, .orb-core, .orb-ring, .orb-satellites { animation: none; }
+}
+
+/* ── chat console ───────────────────────────────────────────────────────── */
+.console { width: min(760px, 100%); }
+
+.transcript {
+  max-height: 26vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 4px 14px;
+}
+.transcript-hint { color: var(--text-dim); font-size: 13px; text-align: center; margin: 0; }
+
+.line { display: flex; gap: 12px; font-size: 14px; line-height: 1.5; }
+.line-who {
+  flex: 0 0 46px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding-top: 2px;
+}
+.line--user .line-who { color: var(--text-dim); }
+.line--rigel .line-who { color: rgb(var(--ice)); }
+.line-text { color: var(--text); }
+.line--user .line-text { color: #b9cae8; }
+
+.composer {
+  display: flex;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid rgba(var(--ice), 0.22);
+  border-radius: 14px;
+  background: rgba(10, 20, 38, 0.6);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 40px rgba(var(--ice), 0.08);
+}
+.composer input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-size: 15px;
+  padding: 8px 10px;
+}
+.composer input::placeholder { color: var(--text-dim); }
+.composer button {
+  border: none;
+  border-radius: 10px;
+  padding: 8px 20px;
+  font-weight: 600;
+  color: #04070f;
+  background: rgb(var(--ice));
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.composer button:disabled { opacity: 0.4; cursor: default; }

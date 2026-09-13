@@ -2,14 +2,20 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
-.eggs/
-build/
-dist/
-
-# Virtual environments
 .venv/
 venv/
-env/
+
+# Node / frontend
+node_modules/
+desktop/dist/
+desktop/vite.config.js.timestamp-*
+
+# Rust / Tauri
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+
+# Rigel runtime store (user-scoped; never committed)
+.rigel/
 
 # Environment / secrets
 .env
