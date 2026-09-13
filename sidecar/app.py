@@ -1,7 +1,7 @@
 """Rigel FastAPI sidecar.
 
 Run standalone (dev):
-    ./.venv/bin/python -m sidecar          # binds RIGEL_PORT or 5131
+    ./.venv/bin/python -m sidecar          # binds RIGEL_PORT or 5140
 
 Endpoints (all under /api/rigel):
     POST /chat    — send a user message; logs the turn, logs any command
@@ -23,7 +23,7 @@ from pydantic import BaseModel
 
 from sidecar import brain, db
 
-RIGEL_PORT = int(os.getenv("RIGEL_PORT", "5131"))
+RIGEL_PORT = int(os.getenv("RIGEL_PORT", "5140"))
 
 app = FastAPI(title="Rigel Sidecar", version="0.1.0")
 

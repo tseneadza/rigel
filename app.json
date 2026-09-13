@@ -9,7 +9,7 @@
   "web": {
     "enabled": true,
     "entry": "sidecar/app.py",
-    "port": 5131,
+    "port": 5140,
     "framework": "fastapi",
     "requirements": "sidecar/requirements.txt",
     "venv": ".venv",

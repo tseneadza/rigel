@@ -1,6 +1,6 @@
 // Thin client for the Rigel sidecar. Base URL is overridable at build time
 // via VITE_RIGEL_API so the packaged Tauri app and dev server can differ.
-const BASE = import.meta.env.VITE_RIGEL_API || "http://localhost:5131";
+const BASE = import.meta.env.VITE_RIGEL_API || "http://localhost:5140";
 
 async function req(path, opts) {
   const res = await fetch(`${BASE}${path}`, {

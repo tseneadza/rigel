@@ -49,7 +49,7 @@ Rigel is a standalone **Tauri (Rust) + React** desktop app talking to a lean loc
                             │  HTTP  /api/rigel/*
                             ▼
 ┌───────────────────────────────────────────────────────┐
-│   Rigel Sidecar  —  FastAPI  (port 5131)                │
+│   Rigel Sidecar  —  FastAPI  (port 5140)                │
 │     • brain.py   → reply + command-intent parsing        │
 │     • db.py      → SQLite log/memory store               │
 └───────────────┬───────────────────────┬───────────────┘
@@ -81,7 +81,7 @@ cd rigel
 ```bash
 python3 -m venv .venv
 ./.venv/bin/pip install -r sidecar/requirements.txt
-./.venv/bin/python -m sidecar          # serves http://127.0.0.1:5131
+./.venv/bin/python -m sidecar          # serves http://127.0.0.1:5140
 ```
 
 ### 3. Start the desktop app (terminal 2)
@@ -107,7 +107,7 @@ Once the orb is up, talk to Rigel (voice arrives in a later slice):
 
 Inspect what Rigel has logged at any time:
 ```bash
-curl http://127.0.0.1:5131/api/rigel/logs | python3 -m json.tool
+curl http://127.0.0.1:5140/api/rigel/logs | python3 -m json.tool
 ```
 
 ---
