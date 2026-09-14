@@ -104,7 +104,8 @@ body {
     transparent 100%);
   box-shadow:
     0 0 40px rgba(var(--orb), 0.9),
-    0 0 120px rgba(var(--orb), 0.5);
+    0 0 120px rgba(var(--orb), 0.6),
+    inset 0 0 20px rgba(var(--orb), 0.3);
   animation: breathe 5.5s ease-in-out infinite;
 }
 
@@ -133,6 +134,19 @@ body {
   background: rgb(var(--orb));
   box-shadow: 0 0 12px rgba(var(--orb), 0.9);
   top: 50%; left: 50%;
+}
+
+/* Electron streak trail */
+.orb-satellites i::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  height: 1px;
+  width: calc(var(--orb-diameter, 620px) * 0.12);
+  background: linear-gradient(to right, transparent, rgba(var(--orb), 0.7));
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 .orb-satellites i:nth-child(1) { transform: rotate(0deg) translateX(calc(var(--orb-diameter, 620px) * 0.48)); }
 .orb-satellites i:nth-child(2) { transform: rotate(130deg) translateX(calc(var(--orb-diameter, 620px) * 0.48)); }
