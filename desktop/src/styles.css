@@ -124,26 +124,28 @@ body {
 /* Bohr model orbitals */
 .orb-orbital {
   position: absolute;
-  width: 46%;
-  aspect-ratio: 1;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  animation: orbit-spin linear infinite;
 }
 
-/* Orbital ring sizes matching visual rings */
+/* Orbital sizes and animations */
 .orb-orbital--1 {
-  width: calc(var(--orb-diameter, 620px) * 0.37);
-  animation: orbit-spin 8s linear infinite;
+  width: 46%;
+  aspect-ratio: 1;
+  animation-duration: 8s;
 }
 .orb-orbital--2 {
-  width: calc(var(--orb-diameter, 620px) * 0.61);
-  animation: orbit-spin 12s linear infinite;
+  width: 61%;
+  aspect-ratio: 1;
+  animation-duration: 12s;
   animation-direction: reverse;
 }
 .orb-orbital--3 {
-  width: calc(var(--orb-diameter, 620px) * 0.74);
-  animation: orbit-spin 16s linear infinite;
+  width: 74%;
+  aspect-ratio: 1;
+  animation-duration: 16s;
 }
 
 .rigel-orb[data-state="thinking"] .orb-orbital--1 { animation-duration: 3s; }
@@ -160,19 +162,20 @@ body {
   box-shadow: 0 0 12px rgba(var(--orb), 0.9);
   top: 50%;
   left: 50%;
-  transform: translateY(-50%);
+  margin-left: calc(var(--orb-diameter, 620px) * -0.0055);
+  margin-top: calc(var(--orb-diameter, 620px) * -0.0055);
 }
 
-/* Position electrons around their orbital */
-.orb-orbital--1 .electron--1 { transform: translateY(-50%) translateX(calc(var(--orb-diameter, 620px) * 0.185)); }
-.orb-orbital--1 .electron--2 { transform: translateY(-50%) rotate(180deg) translateX(calc(var(--orb-diameter, 620px) * 0.185)); }
+/* Position electrons around their orbital - on the ring edge */
+.orb-orbital--1 .electron--1 { transform: translateX(23%) translateY(-50%); }
+.orb-orbital--1 .electron--2 { transform: translateX(-23%) translateY(-50%); }
 
-.orb-orbital--2 .electron--1 { transform: translateY(-50%) translateX(calc(var(--orb-diameter, 620px) * 0.305)); }
-.orb-orbital--2 .electron--2 { transform: translateY(-50%) rotate(120deg) translateX(calc(var(--orb-diameter, 620px) * 0.305)); }
-.orb-orbital--2 .electron--3 { transform: translateY(-50%) rotate(240deg) translateX(calc(var(--orb-diameter, 620px) * 0.305)); }
+.orb-orbital--2 .electron--1 { transform: rotate(0deg) translateX(30.5%) translateY(-50%); }
+.orb-orbital--2 .electron--2 { transform: rotate(120deg) translateX(30.5%) translateY(-50%); }
+.orb-orbital--2 .electron--3 { transform: rotate(240deg) translateX(30.5%) translateY(-50%); }
 
-.orb-orbital--3 .electron--1 { transform: translateY(-50%) translateX(calc(var(--orb-diameter, 620px) * 0.37)); }
-.orb-orbital--3 .electron--2 { transform: translateY(-50%) rotate(180deg) translateX(calc(var(--orb-diameter, 620px) * 0.37)); }
+.orb-orbital--3 .electron--1 { transform: translateX(37%) translateY(-50%); }
+.orb-orbital--3 .electron--2 { transform: translateX(-37%) translateY(-50%); }
 
 /* Electron streak trail */
 .electron::before {
