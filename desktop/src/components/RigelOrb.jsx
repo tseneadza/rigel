@@ -41,23 +41,19 @@ export default function RigelOrb({
         <span className="orb-ring orb-ring--3" />
         <span className="orb-core" />
 
-        {/* Orbital ring 1 - 2 electrons */}
+        {/* Three tilted 3D orbits; --a spreads electrons around each ring */}
         <span className="orb-electrons orb-electrons--1">
-          <i className="electron" style={{ animationDelay: "0s" }} />
-          <i className="electron" style={{ animationDelay: "4s" }} />
+          <i className="electron" style={{ "--a": "0deg" }} />
+          <i className="electron" style={{ "--a": "180deg" }} />
         </span>
-
-        {/* Orbital ring 2 - 3 electrons */}
         <span className="orb-electrons orb-electrons--2">
-          <i className="electron" style={{ animationDelay: "0s" }} />
-          <i className="electron" style={{ animationDelay: "4s" }} />
-          <i className="electron" style={{ animationDelay: "8s" }} />
+          <i className="electron" style={{ "--a": "0deg" }} />
+          <i className="electron" style={{ "--a": "120deg" }} />
+          <i className="electron" style={{ "--a": "240deg" }} />
         </span>
-
-        {/* Orbital ring 3 - 2 electrons */}
         <span className="orb-electrons orb-electrons--3">
-          <i className="electron" style={{ animationDelay: "0s" }} />
-          <i className="electron" style={{ animationDelay: "8s" }} />
+          <i className="electron" style={{ "--a": "90deg" }} />
+          <i className="electron" style={{ "--a": "270deg" }} />
         </span>
       </div>
       <div className="orb-caption">{caption}</div>

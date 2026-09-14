@@ -78,7 +78,7 @@ body {
   display: grid;
   place-items: center;
   transition: width 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
-  perspective: 800px;
+  perspective: 2000px;
   transform-style: preserve-3d;
 }
 
@@ -92,7 +92,6 @@ body {
     transparent 70%);
   filter: blur(6px);
   animation: breathe 5.5s ease-in-out infinite;
-  z-index: 0;
 }
 
 .orb-core {
@@ -110,7 +109,6 @@ body {
     0 0 120px rgba(var(--orb), 0.6),
     inset 0 0 20px rgba(var(--orb), 0.3);
   animation: breathe 5.5s ease-in-out infinite;
-  z-index: 10;
 }
 
 .orb-ring {
@@ -123,68 +121,70 @@ body {
 .orb-ring--2 { width: 46%; aspect-ratio: 1; animation-delay: 1.6s; }
 .orb-ring--3 { width: 46%; aspect-ratio: 1; animation-delay: 3.2s; }
 
-/* Electron orbital rings - each orbits at different speeds */
+/* ── electron orbits (true 3D) ──────────────────────────────────────────
+   Each .orb-electrons is a circle tilted ~66° on X so it reads as an ellipse,
+   then rotated on Z to orient it. The keyframes hold that tilt constant and
+   only spin the in-plane rotateZ, so electrons swing through +z (in front of
+   the nucleus) and -z (behind it). preserve-3d on the whole chain lets the
+   browser depth-sort against the core, which sits at z=0. */
 .orb-electrons {
+  --e-size: calc(var(--orb-diameter, min(64vmin, 620px)) * 0.014);
+  --e-trail: calc(var(--orb-diameter, min(64vmin, 620px)) * 0.09);
   position: absolute;
-  width: 100%;
+  top: 50%;
+  left: 50%;
   aspect-ratio: 1;
-  top: 0;
-  left: 0;
-  z-index: 1;
+  margin: calc(var(--w) / -2) 0 0 calc(var(--w) / -2);
+  width: var(--w);
+  border-radius: 50%;
+  border: 1px solid rgba(var(--orb), 0.22);
   transform-style: preserve-3d;
+  animation: orbit-a 9s linear infinite;
 }
+.orb-electrons--1 { --w: 48%; animation-name: orbit-a; animation-duration: 7s; }
+.orb-electrons--2 { --w: 64%; animation-name: orbit-b; animation-duration: 10s; }
+.orb-electrons--3 { --w: 80%; animation-name: orbit-c; animation-duration: 13s; }
 
-.orb-electrons--1 {
-  width: 46%;
-  margin-left: 27%;
-  margin-top: 27%;
-  animation: orbit-3d-1 8s linear infinite;
-}
-.orb-electrons--2 {
-  width: 61%;
-  margin-left: 19.5%;
-  margin-top: 19.5%;
-  animation: orbit-3d-2 12s linear infinite;
-}
-.orb-electrons--3 {
-  width: 74%;
-  margin-left: 13%;
-  margin-top: 13%;
-  animation: orbit-3d-3 16s linear infinite;
-}
+.rigel-orb[data-state="thinking"] .orb-electrons--1 { animation-duration: 2.5s; }
+.rigel-orb[data-state="thinking"] .orb-electrons--2 { animation-duration: 3.5s; }
+.rigel-orb[data-state="thinking"] .orb-electrons--3 { animation-duration: 4.5s; }
 
-.rigel-orb[data-state="thinking"] .orb-electrons--1 { animation-duration: 3s; }
-.rigel-orb[data-state="thinking"] .orb-electrons--2 { animation-duration: 4s; }
-.rigel-orb[data-state="thinking"] .orb-electrons--3 { animation-duration: 5s; }
-
-/* Individual electrons - positioned on orbital ring edge */
+/* Each electron fills its orbit and is rotated by --a to spread them out;
+   the dot itself lives on the ring's top edge via ::after. */
 .electron {
   position: absolute;
-  width: calc(var(--orb-diameter, 620px) * 0.011);
-  height: calc(var(--orb-diameter, 620px) * 0.011);
+  inset: 0;
+  transform: rotate(var(--a, 0deg));
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+.electron::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: var(--e-size);
+  height: var(--e-size);
+  margin: calc(var(--e-size) / -2) 0 0 calc(var(--e-size) / -2);
   border-radius: 50%;
   background: rgb(var(--orb));
   box-shadow: 0 0 12px rgba(var(--orb), 0.9);
-  top: -5.5%;
-  left: 50%;
-  transform: translateX(-50%);
 }
-
-/* Electron streak trail */
+/* Streak trail, tangent to the orbit, trailing opposite the spin direction */
 .electron::before {
-  content: '';
+  content: "";
   position: absolute;
-  right: 100%;
-  top: 50%;
+  top: 0;
+  left: 50%;
   height: 1px;
-  width: calc(var(--orb-diameter, 620px) * 0.08);
+  width: var(--e-trail);
+  transform: translate(-100%, -50%);
   background: linear-gradient(to right, transparent, rgba(var(--orb), 0.7));
-  transform: translateY(-50%);
-  pointer-events: none;
 }
-.orb-satellites i:nth-child(1) { transform: rotate(0deg) translateX(calc(var(--orb-diameter, 620px) * 0.48)); }
-.orb-satellites i:nth-child(2) { transform: rotate(130deg) translateX(calc(var(--orb-diameter, 620px) * 0.48)); }
-.orb-satellites i:nth-child(3) { transform: rotate(245deg) translateX(calc(var(--orb-diameter, 620px) * 0.48)); }
+.orb-electrons--2 .electron::before {
+  transform: translate(0, -50%);
+  background: linear-gradient(to left, transparent, rgba(var(--orb), 0.7));
+}
 
 .orb-caption {
   font-family: var(--mono);
@@ -202,23 +202,22 @@ body {
   0%   { transform: scale(1);   opacity: 0.6; }
   100% { transform: scale(2.1); opacity: 0;   }
 }
-@keyframes orbit {
-  to { transform: rotate(360deg); }
+/* Tilt is repeated in from/to so it stays fixed; only the last rotateZ spins. */
+@keyframes orbit-a {
+  from { transform: rotateZ(0deg)   rotateX(66deg) rotateZ(0deg); }
+  to   { transform: rotateZ(0deg)   rotateX(66deg) rotateZ(360deg); }
 }
-
-/* 3D orbital animations with tilt */
-@keyframes orbit-3d-1 {
-  to { transform: rotateX(0deg) rotateZ(0deg) rotateY(360deg); }
+@keyframes orbit-b {
+  from { transform: rotateZ(60deg)  rotateX(66deg) rotateZ(0deg); }
+  to   { transform: rotateZ(60deg)  rotateX(66deg) rotateZ(-360deg); }
 }
-@keyframes orbit-3d-2 {
-  to { transform: rotateX(60deg) rotateZ(0deg) rotateY(360deg); }
-}
-@keyframes orbit-3d-3 {
-  to { transform: rotateX(-60deg) rotateZ(30deg) rotateY(360deg); }
+@keyframes orbit-c {
+  from { transform: rotateZ(-60deg) rotateX(66deg) rotateZ(0deg); }
+  to   { transform: rotateZ(-60deg) rotateX(66deg) rotateZ(360deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .orb-glow, .orb-core, .orb-ring, .orb-satellites { animation: none; }
+  .orb-glow, .orb-core, .orb-ring, .orb-electrons { animation: none; }
 }
 
 /* ── chat console ───────────────────────────────────────────────────────── */
