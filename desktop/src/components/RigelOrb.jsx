@@ -41,23 +41,23 @@ export default function RigelOrb({
         <span className="orb-ring orb-ring--3" />
         <span className="orb-core" />
 
-        {/* Orbital 1: 2 electrons on inner ring */}
-        <span className="orb-orbital orb-orbital--1">
-          <i className="electron electron--1" />
-          <i className="electron electron--2" />
+        {/* Orbital ring 1 - 2 electrons */}
+        <span className="orb-electrons orb-electrons--1">
+          <i className="electron" style={{ animationDelay: "0s" }} />
+          <i className="electron" style={{ animationDelay: "4s" }} />
         </span>
 
-        {/* Orbital 2: 3 electrons on middle ring */}
-        <span className="orb-orbital orb-orbital--2">
-          <i className="electron electron--1" />
-          <i className="electron electron--2" />
-          <i className="electron electron--3" />
+        {/* Orbital ring 2 - 3 electrons */}
+        <span className="orb-electrons orb-electrons--2">
+          <i className="electron" style={{ animationDelay: "0s" }} />
+          <i className="electron" style={{ animationDelay: "4s" }} />
+          <i className="electron" style={{ animationDelay: "8s" }} />
         </span>
 
-        {/* Orbital 3: 2 electrons on outer ring */}
-        <span className="orb-orbital orb-orbital--3">
-          <i className="electron electron--1" />
-          <i className="electron electron--2" />
+        {/* Orbital ring 3 - 2 electrons */}
+        <span className="orb-electrons orb-electrons--3">
+          <i className="electron" style={{ animationDelay: "0s" }} />
+          <i className="electron" style={{ animationDelay: "8s" }} />
         </span>
       </div>
       <div className="orb-caption">{caption}</div>

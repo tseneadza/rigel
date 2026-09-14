@@ -121,38 +121,39 @@ body {
 .orb-ring--2 { width: 46%; aspect-ratio: 1; animation-delay: 1.6s; }
 .orb-ring--3 { width: 46%; aspect-ratio: 1; animation-delay: 3.2s; }
 
-/* Bohr model orbitals */
-.orb-orbital {
+/* Electron orbital rings - each orbits at different speeds */
+.orb-electrons {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  animation: orbit-spin linear infinite;
+  width: 100%;
+  aspect-ratio: 1;
+  top: 0;
+  left: 0;
 }
 
-/* Orbital sizes and animations */
-.orb-orbital--1 {
+.orb-electrons--1 {
   width: 46%;
-  aspect-ratio: 1;
-  animation-duration: 8s;
+  animation: orbit 8s linear infinite;
+  margin-left: 27%;
+  margin-top: 27%;
 }
-.orb-orbital--2 {
+.orb-electrons--2 {
   width: 61%;
-  aspect-ratio: 1;
-  animation-duration: 12s;
-  animation-direction: reverse;
+  animation: orbit 12s linear infinite reverse;
+  margin-left: 19.5%;
+  margin-top: 19.5%;
 }
-.orb-orbital--3 {
+.orb-electrons--3 {
   width: 74%;
-  aspect-ratio: 1;
-  animation-duration: 16s;
+  animation: orbit 16s linear infinite;
+  margin-left: 13%;
+  margin-top: 13%;
 }
 
-.rigel-orb[data-state="thinking"] .orb-orbital--1 { animation-duration: 3s; }
-.rigel-orb[data-state="thinking"] .orb-orbital--2 { animation-duration: 4s; }
-.rigel-orb[data-state="thinking"] .orb-orbital--3 { animation-duration: 5s; }
+.rigel-orb[data-state="thinking"] .orb-electrons--1 { animation-duration: 3s; }
+.rigel-orb[data-state="thinking"] .orb-electrons--2 { animation-duration: 4s; }
+.rigel-orb[data-state="thinking"] .orb-electrons--3 { animation-duration: 5s; }
 
-/* Electrons positioned on their orbital */
+/* Individual electrons */
 .electron {
   position: absolute;
   width: calc(var(--orb-diameter, 620px) * 0.011);
@@ -165,17 +166,6 @@ body {
   margin-left: calc(var(--orb-diameter, 620px) * -0.0055);
   margin-top: calc(var(--orb-diameter, 620px) * -0.0055);
 }
-
-/* Position electrons around their orbital - on the ring edge */
-.orb-orbital--1 .electron--1 { transform: translateX(23%) translateY(-50%); }
-.orb-orbital--1 .electron--2 { transform: translateX(-23%) translateY(-50%); }
-
-.orb-orbital--2 .electron--1 { transform: rotate(0deg) translateX(30.5%) translateY(-50%); }
-.orb-orbital--2 .electron--2 { transform: rotate(120deg) translateX(30.5%) translateY(-50%); }
-.orb-orbital--2 .electron--3 { transform: rotate(240deg) translateX(30.5%) translateY(-50%); }
-
-.orb-orbital--3 .electron--1 { transform: translateX(37%) translateY(-50%); }
-.orb-orbital--3 .electron--2 { transform: translateX(-37%) translateY(-50%); }
 
 /* Electron streak trail */
 .electron::before {
@@ -211,12 +201,6 @@ body {
 }
 @keyframes orbit {
   to { transform: rotate(360deg); }
-}
-
-/* Orbital rotation animation */
-@keyframes orbit-spin {
-  from { transform: translate(-50%, -50%) rotate(0deg); }
-  to { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
