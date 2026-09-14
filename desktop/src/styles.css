@@ -78,6 +78,8 @@ body {
   display: grid;
   place-items: center;
   transition: width 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  perspective: 1200px;
+  transform-style: preserve-3d;
 }
 
 .orb-glow {
@@ -124,8 +126,22 @@ body {
   width: 78%;
   aspect-ratio: 1;
   animation: orbit 18s linear infinite;
+  transform-style: preserve-3d;
 }
 .rigel-orb[data-state="thinking"] .orb-satellites { animation-duration: 5s; }
+
+/* Three 3D orbital planes */
+.orb-plane-1 {
+  transform: rotateX(0deg) rotateZ(0deg);
+}
+.orb-plane-2 {
+  transform: rotateX(65deg) rotateZ(-30deg);
+  animation-name: orbit-plane-2;
+}
+.orb-plane-3 {
+  transform: rotateX(-65deg) rotateZ(50deg);
+  animation-name: orbit-plane-3;
+}
 .orb-satellites i {
   position: absolute;
   width: calc(var(--orb-diameter, 620px) * 0.011);
@@ -134,7 +150,9 @@ body {
   background: rgb(var(--orb));
   box-shadow: 0 0 12px rgba(var(--orb), 0.9);
   top: 50%; left: 50%;
+  animation: electron-fade 18s ease-in-out infinite;
 }
+.rigel-orb[data-state="thinking"] .orb-satellites i { animation-duration: 5s; }
 
 /* Electron streak trail */
 .orb-satellites i::before {
@@ -170,6 +188,18 @@ body {
 }
 @keyframes orbit {
   to { transform: rotate(360deg); }
+}
+@keyframes orbit-plane-2 {
+  to { transform: rotateX(65deg) rotateZ(-30deg) rotateY(360deg); }
+}
+@keyframes orbit-plane-3 {
+  to { transform: rotateX(-65deg) rotateZ(50deg) rotateY(-360deg); }
+}
+
+/* Fade electrons behind nucleus and back */
+@keyframes electron-fade {
+  0%, 100%   { opacity: 1; }
+  45%, 55%   { opacity: 0.15; }
 }
 
 @media (prefers-reduced-motion: reduce) {

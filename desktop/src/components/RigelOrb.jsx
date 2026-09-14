@@ -40,8 +40,15 @@ export default function RigelOrb({
         <span className="orb-ring orb-ring--2" />
         <span className="orb-ring orb-ring--3" />
         <span className="orb-core" />
-        <span className="orb-satellites">
-          <i /><i /><i />
+        {/* Three orbital planes for 3D effect */}
+        <span className="orb-satellites orb-plane-1">
+          <i />
+        </span>
+        <span className="orb-satellites orb-plane-2">
+          <i />
+        </span>
+        <span className="orb-satellites orb-plane-3">
+          <i />
         </span>
       </div>
       <div className="orb-caption">{caption}</div>
