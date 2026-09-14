@@ -125,22 +125,19 @@ body {
   position: absolute;
   width: 78%;
   aspect-ratio: 1;
-  animation: orbit 18s linear infinite;
   transform-style: preserve-3d;
 }
 .rigel-orb[data-state="thinking"] .orb-satellites { animation-duration: 5s; }
 
 /* Three 3D orbital planes */
 .orb-plane-1 {
-  transform: rotateX(0deg) rotateZ(0deg);
+  animation: orbit-plane-1 18s linear infinite;
 }
 .orb-plane-2 {
-  transform: rotateX(65deg) rotateZ(-30deg);
-  animation-name: orbit-plane-2;
+  animation: orbit-plane-2 18s linear infinite;
 }
 .orb-plane-3 {
-  transform: rotateX(-65deg) rotateZ(50deg);
-  animation-name: orbit-plane-3;
+  animation: orbit-plane-3 18s linear infinite;
 }
 .orb-satellites i {
   position: absolute;
@@ -189,11 +186,23 @@ body {
 @keyframes orbit {
   to { transform: rotate(360deg); }
 }
-@keyframes orbit-plane-2 {
-  to { transform: rotateX(65deg) rotateZ(-30deg) rotateY(360deg); }
+
+/* Plane 1: Horizontal orbit */
+@keyframes orbit-plane-1 {
+  0% { transform: rotateX(0deg) rotateZ(0deg) rotateY(0deg); }
+  100% { transform: rotateX(0deg) rotateZ(0deg) rotateY(360deg); }
 }
+
+/* Plane 2: Tilted 65deg on X, -30deg on Z, rotating forward */
+@keyframes orbit-plane-2 {
+  0% { transform: rotateX(65deg) rotateZ(-30deg) rotateY(0deg); }
+  100% { transform: rotateX(65deg) rotateZ(-30deg) rotateY(360deg); }
+}
+
+/* Plane 3: Tilted -65deg on X, 50deg on Z, rotating backward */
 @keyframes orbit-plane-3 {
-  to { transform: rotateX(-65deg) rotateZ(50deg) rotateY(-360deg); }
+  0% { transform: rotateX(-65deg) rotateZ(50deg) rotateY(0deg); }
+  100% { transform: rotateX(-65deg) rotateZ(50deg) rotateY(-360deg); }
 }
 
 /* Fade electrons behind nucleus and back */
