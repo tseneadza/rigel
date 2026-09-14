@@ -92,6 +92,7 @@ body {
     transparent 70%);
   filter: blur(6px);
   animation: breathe 5.5s ease-in-out infinite;
+  z-index: 0;
 }
 
 .orb-core {
@@ -109,6 +110,7 @@ body {
     0 0 120px rgba(var(--orb), 0.6),
     inset 0 0 20px rgba(var(--orb), 0.3);
   animation: breathe 5.5s ease-in-out infinite;
+  z-index: 10;
 }
 
 .orb-ring {
@@ -128,6 +130,7 @@ body {
   aspect-ratio: 1;
   top: 0;
   left: 0;
+  z-index: 1;
 }
 
 .orb-electrons--1 {
