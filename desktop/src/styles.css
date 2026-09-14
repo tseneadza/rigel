@@ -153,7 +153,7 @@ body {
 .rigel-orb[data-state="thinking"] .orb-electrons--2 { animation-duration: 4s; }
 .rigel-orb[data-state="thinking"] .orb-electrons--3 { animation-duration: 5s; }
 
-/* Individual electrons */
+/* Individual electrons - positioned on orbital ring edge */
 .electron {
   position: absolute;
   width: calc(var(--orb-diameter, 620px) * 0.011);
@@ -161,10 +161,9 @@ body {
   border-radius: 50%;
   background: rgb(var(--orb));
   box-shadow: 0 0 12px rgba(var(--orb), 0.9);
-  top: 50%;
+  top: -5.5%;
   left: 50%;
-  margin-left: calc(var(--orb-diameter, 620px) * -0.0055);
-  margin-top: calc(var(--orb-diameter, 620px) * -0.0055);
+  transform: translateX(-50%);
 }
 
 /* Electron streak trail */
