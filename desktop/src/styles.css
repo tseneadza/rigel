@@ -78,7 +78,7 @@ body {
   display: grid;
   place-items: center;
   transition: width 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
-  perspective: 1200px;
+  perspective: 800px;
   transform-style: preserve-3d;
 }
 
@@ -131,25 +131,26 @@ body {
   top: 0;
   left: 0;
   z-index: 1;
+  transform-style: preserve-3d;
 }
 
 .orb-electrons--1 {
   width: 46%;
-  animation: orbit 8s linear infinite;
   margin-left: 27%;
   margin-top: 27%;
+  animation: orbit-3d-1 8s linear infinite;
 }
 .orb-electrons--2 {
   width: 61%;
-  animation: orbit 12s linear infinite reverse;
   margin-left: 19.5%;
   margin-top: 19.5%;
+  animation: orbit-3d-2 12s linear infinite;
 }
 .orb-electrons--3 {
   width: 74%;
-  animation: orbit 16s linear infinite;
   margin-left: 13%;
   margin-top: 13%;
+  animation: orbit-3d-3 16s linear infinite;
 }
 
 .rigel-orb[data-state="thinking"] .orb-electrons--1 { animation-duration: 3s; }
@@ -203,6 +204,17 @@ body {
 }
 @keyframes orbit {
   to { transform: rotate(360deg); }
+}
+
+/* 3D orbital animations with tilt */
+@keyframes orbit-3d-1 {
+  to { transform: rotateX(0deg) rotateZ(0deg) rotateY(360deg); }
+}
+@keyframes orbit-3d-2 {
+  to { transform: rotateX(60deg) rotateZ(0deg) rotateY(360deg); }
+}
+@keyframes orbit-3d-3 {
+  to { transform: rotateX(-60deg) rotateZ(30deg) rotateY(360deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
