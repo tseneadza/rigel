@@ -9,6 +9,8 @@ Endpoints (all under /api/rigel):
     GET  /state   — current orb state ('idle' | 'thinking' | 'speaking').
     GET  /logs    — recent conversation turns + command attempts.
     GET  /health  — liveness.
+    GET  /settings/orb-config  — persisted orb size/position (or defaults).
+    POST /settings/orb-config  — save orb size/position.
 
 Forked in spirit from AgenticOS's sidecar; intentionally self-contained
 (SQLite, no MySQL, no AgenticOS imports).
@@ -17,7 +19,7 @@ from __future__ import annotations
 
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -117,7 +119,7 @@ def get_orb_config() -> dict:
 def save_orb_config(body: OrbConfig) -> dict:
     valid, msg = _validate_orb_config(body)
     if not valid:
-        return {"error": msg}, 400
+        raise HTTPException(status_code=400, detail=msg)
 
     db.set_setting("orb_config", body.model_dump())
     return {"ok": True}

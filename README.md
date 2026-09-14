@@ -15,7 +15,7 @@ Instead of clicking through nested folders and menus, you look to your navigatio
 ## 🕶️ The Aesthetic & Concept
 
 * **The Navigational Anchor:** Named after the luminous blue supergiant star in the Orion constellation, Rigel acts as your bright guiding anchor through the massive ocean of your local computer files.
-* **The Blazing Blue HUD:** A high-contrast, glowing ice-blue interface. The central orb — a white-hot core wrapped in layered glow, expanding ripple rings, and orbiting satellites — breathes like a distant star when idle and spins up when it's working.
+* **The Blazing Blue HUD:** A high-contrast, glowing ice-blue interface. The central orb — a white-hot nucleus wrapped in layered glow, expanding ripple rings, and electrons streaking along tilted 3D orbits — breathes like a distant star when idle and spins up when it's working.
 
 ---
 
@@ -23,12 +23,15 @@ Instead of clicking through nested folders and menus, you look to your navigatio
 
 Rigel is in its **first slice**. What works today:
 
-* ✅ **Full-screen scalable orb** (Tauri + React) — the "blazing blue" presence, live and animating.
+* ✅ **Full-screen scalable orb** (Tauri + React) — the "blazing blue" presence, live and animating as a 3D Bohr-style atom: electrons on three tilted orbits pass behind the nucleus and re-emerge.
+* ✅ **Resizable, pinnable orb** — a size slider (60–620 px) and corner picker in the console let you shrink the orb into a corner; the choice persists across launches in a `settings` table.
 * ✅ **Text conversation loop** — talk to Rigel by typing; the transcript rehydrates from Rigel's own store on launch.
 * ✅ **Logging from day one** — every conversation turn *and* every command Rigel attempts is written to a local SQLite store (`~/.rigel/rigel.db`).
 
 Deferred to later slices (scaffolded, not yet wired):
 
+* 🔜 **Auto-shrink while working** — the orb is meant to tuck into a corner while Rigel executes commands and act as a compact prompt; the shrink/expand triggers aren't wired yet.
+* 🔜 **Borderless / click-through window** — shrinking the actual Tauri window (not just the orb) with no OS chrome.
 * 🔜 **Voice I/O** — Rigel will get its own fresh STT/TTS pipeline.
 * 🔜 **Real command execution** — the OS-hook layer (open/close apps, file CRUD) runs behind approval gates. For now Rigel *detects and logs* command intents without executing them.
 * 🔜 **LLM brain** — the intent parser is a pluggable stub (`sidecar/brain.py`) with a clean seam for dropping in Claude.
@@ -51,7 +54,7 @@ Rigel is a standalone **Tauri (Rust) + React** desktop app talking to a lean loc
 ┌───────────────────────────────────────────────────────┐
 │   Rigel Sidecar  —  FastAPI  (port 5140)                │
 │     • brain.py   → reply + command-intent parsing        │
-│     • db.py      → SQLite log/memory store               │
+│     • db.py      → SQLite log/memory + settings store    │
 └───────────────┬───────────────────────┬───────────────┘
                 ▼                       ▼
      ┌───────────────────────┐   ┌───────────────────────┐
@@ -78,6 +81,7 @@ cd rigel
 ```
 
 ### 2. Start the sidecar (terminal 1)
+Run this from the **repo root** — `sidecar` is a package, so `python -m sidecar` won't resolve from inside the folder.
 ```bash
 python3 -m venv .venv
 ./.venv/bin/pip install -r sidecar/requirements.txt
@@ -90,8 +94,9 @@ cd desktop
 npm install
 npm run dev            # web preview at http://localhost:1425
 # — or, for the native window —
-npm run tauri dev      # compiles the Tauri shell (first run is slow)
+npx tauri dev          # compiles the Tauri shell (first run is slow)
 ```
+If Vite complains that port 1425 is in use, a previous dev server is still running: `lsof -ti:1425 | xargs kill -9`.
 
 The orb appears on launch. Type to Rigel; every turn and every detected command lands in `~/.rigel/rigel.db`.
 
@@ -117,12 +122,12 @@ curl http://127.0.0.1:5140/api/rigel/logs | python3 -m json.tool
 ```
 rigel/
 ├── desktop/          Tauri + React front end (the orb & console)
-│   ├── src/          React components (RigelOrb, ChatConsole, App)
+│   ├── src/          React components (RigelOrb, ChatConsole, ResizeControl, App)
 │   └── src-tauri/    Rust/Tauri native shell
 └── sidecar/          Python FastAPI service
-    ├── app.py        routes: /chat /state /logs /health
+    ├── app.py        routes: /chat /state /logs /health /settings/orb-config
     ├── brain.py      reply + command-intent parser (LLM seam)
-    └── db.py         SQLite log/memory store
+    └── db.py         SQLite store: turns, command_attempts, settings
 ```
 
 ---
