@@ -11,12 +11,29 @@
  * on the root, so retuning a state color is a one-line change.
  *
  * Props:
- *   state   — "idle" | "thinking" | "speaking" (default "idle")
- *   caption — short line under the orb (default "Standing by.")
+ *   state           — "idle" | "thinking" | "speaking" (default "idle")
+ *   caption         — short line under the orb (default "Standing by.")
+ *   diameterPx     — fixed diameter in pixels, or undefined for responsive (default undefined)
+ *   positionCorner — "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right" (default "center")
+ *   isMinimized    — hide caption if true (default false)
  */
-export default function RigelOrb({ state = "idle", caption = "Standing by." }) {
+export default function RigelOrb({
+  state = "idle",
+  caption = "Standing by.",
+  diameterPx = undefined,
+  positionCorner = "center",
+  isMinimized = false,
+}) {
   return (
-    <div className="rigel-orb" data-state={state} role="img" aria-label={`Rigel — ${state}`}>
+    <div
+      className="rigel-orb"
+      data-state={state}
+      data-position={positionCorner}
+      data-minimized={isMinimized}
+      style={diameterPx ? { "--orb-diameter": `${diameterPx}px` } : {}}
+      role="img"
+      aria-label={`Rigel — ${state}`}
+    >
       <div className="orb-stage">
         <span className="orb-glow" />
         <span className="orb-ring orb-ring--1" />

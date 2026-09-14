@@ -71,6 +71,15 @@ def _migrate(conn: sqlite3.Connection) -> None:
             detail    TEXT,                     -- human-readable note
             FOREIGN KEY (turn_id) REFERENCES turns (id)
         );
+
+        CREATE TABLE IF NOT EXISTS settings (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            key          TEXT    UNIQUE NOT NULL,
+            value        TEXT    NOT NULL,
+            last_updated TEXT    NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_settings_key ON settings(key);
         """
     )
     conn.commit()
@@ -124,3 +133,26 @@ def recent_commands(limit: int = 50) -> list[dict]:
         d["args"] = json.loads(d["args"]) if d["args"] else {}
         out.append(d)
     return list(reversed(out))
+
+
+def get_setting(key: str) -> dict | None:
+    """Fetch a setting by key. Returns parsed JSON or None if not found."""
+    conn = connect()
+    row = conn.execute(
+        "SELECT value FROM settings WHERE key = ?", (key,)
+    ).fetchone()
+    return json.loads(row[0]) if row else None
+
+
+def set_setting(key: str, value: dict) -> str:
+    """Save or update a setting. Returns last_updated timestamp."""
+    conn = connect()
+    now = _now()
+    with _LOCK:
+        conn.execute(
+            "INSERT INTO settings (key, value, last_updated) VALUES (?, ?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value, last_updated=excluded.last_updated",
+            (key, json.dumps(value), now)
+        )
+        conn.commit()
+    return now

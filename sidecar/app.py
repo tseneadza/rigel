@@ -44,6 +44,12 @@ class ChatIn(BaseModel):
     text: str
 
 
+class OrbConfig(BaseModel):
+    diameter_px: int
+    position_corner: str
+    is_minimized: bool = False
+
+
 @app.get("/api/rigel/health")
 def health() -> dict:
     return {"ok": True, "service": "rigel-sidecar", "version": "0.1.0"}
@@ -83,6 +89,38 @@ def logs(limit: int = 50) -> dict:
         "turns": db.recent_turns(limit),
         "commands": db.recent_commands(limit),
     }
+
+
+def _validate_orb_config(config: OrbConfig) -> tuple[bool, str]:
+    """Validate orb config values."""
+    if not (60 <= config.diameter_px <= 620):
+        return False, "diameter_px must be 60–620"
+    valid_corners = ("center", "top-left", "top-right", "bottom-left", "bottom-right")
+    if config.position_corner not in valid_corners:
+        return False, f"position_corner must be one of {valid_corners}"
+    return True, ""
+
+
+@app.get("/api/rigel/settings/orb-config")
+def get_orb_config() -> dict:
+    config = db.get_setting("orb_config")
+    if config:
+        return config
+    return {
+        "diameter_px": 620,
+        "position_corner": "center",
+        "is_minimized": False,
+    }
+
+
+@app.post("/api/rigel/settings/orb-config")
+def save_orb_config(body: OrbConfig) -> dict:
+    valid, msg = _validate_orb_config(body)
+    if not valid:
+        return {"error": msg}, 400
+
+    db.set_setting("orb_config", body.model_dump())
+    return {"ok": True}
 
 
 def main() -> None:
