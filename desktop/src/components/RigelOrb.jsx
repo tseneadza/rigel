@@ -40,15 +40,24 @@ export default function RigelOrb({
         <span className="orb-ring orb-ring--2" />
         <span className="orb-ring orb-ring--3" />
         <span className="orb-core" />
-        {/* Three orbital planes for 3D effect */}
-        <span className="orb-satellites orb-plane-1">
-          <i />
+
+        {/* Orbital 1: 2 electrons on inner ring */}
+        <span className="orb-orbital orb-orbital--1">
+          <i className="electron electron--1" />
+          <i className="electron electron--2" />
         </span>
-        <span className="orb-satellites orb-plane-2">
-          <i />
+
+        {/* Orbital 2: 3 electrons on middle ring */}
+        <span className="orb-orbital orb-orbital--2">
+          <i className="electron electron--1" />
+          <i className="electron electron--2" />
+          <i className="electron electron--3" />
         </span>
-        <span className="orb-satellites orb-plane-3">
-          <i />
+
+        {/* Orbital 3: 2 electrons on outer ring */}
+        <span className="orb-orbital orb-orbital--3">
+          <i className="electron electron--1" />
+          <i className="electron electron--2" />
         </span>
       </div>
       <div className="orb-caption">{caption}</div>

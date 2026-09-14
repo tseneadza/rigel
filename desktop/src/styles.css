@@ -121,44 +121,67 @@ body {
 .orb-ring--2 { width: 46%; aspect-ratio: 1; animation-delay: 1.6s; }
 .orb-ring--3 { width: 46%; aspect-ratio: 1; animation-delay: 3.2s; }
 
-.orb-satellites {
+/* Bohr model orbitals */
+.orb-orbital {
   position: absolute;
-  width: 78%;
+  width: 46%;
   aspect-ratio: 1;
-  transform-style: preserve-3d;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
-.rigel-orb[data-state="thinking"] .orb-satellites { animation-duration: 5s; }
 
-/* Three 3D orbital planes */
-.orb-plane-1 {
-  animation: orbit-plane-1 18s linear infinite;
+/* Orbital ring sizes matching visual rings */
+.orb-orbital--1 {
+  width: calc(var(--orb-diameter, 620px) * 0.37);
+  animation: orbit-spin 8s linear infinite;
 }
-.orb-plane-2 {
-  animation: orbit-plane-2 18s linear infinite;
+.orb-orbital--2 {
+  width: calc(var(--orb-diameter, 620px) * 0.61);
+  animation: orbit-spin 12s linear infinite;
+  animation-direction: reverse;
 }
-.orb-plane-3 {
-  animation: orbit-plane-3 18s linear infinite;
+.orb-orbital--3 {
+  width: calc(var(--orb-diameter, 620px) * 0.74);
+  animation: orbit-spin 16s linear infinite;
 }
-.orb-satellites i {
+
+.rigel-orb[data-state="thinking"] .orb-orbital--1 { animation-duration: 3s; }
+.rigel-orb[data-state="thinking"] .orb-orbital--2 { animation-duration: 4s; }
+.rigel-orb[data-state="thinking"] .orb-orbital--3 { animation-duration: 5s; }
+
+/* Electrons positioned on their orbital */
+.electron {
   position: absolute;
   width: calc(var(--orb-diameter, 620px) * 0.011);
   height: calc(var(--orb-diameter, 620px) * 0.011);
   border-radius: 50%;
   background: rgb(var(--orb));
   box-shadow: 0 0 12px rgba(var(--orb), 0.9);
-  top: 50%; left: 50%;
-  animation: electron-fade 18s ease-in-out infinite;
+  top: 50%;
+  left: 50%;
+  transform: translateY(-50%);
 }
-.rigel-orb[data-state="thinking"] .orb-satellites i { animation-duration: 5s; }
+
+/* Position electrons around their orbital */
+.orb-orbital--1 .electron--1 { transform: translateY(-50%) translateX(calc(var(--orb-diameter, 620px) * 0.185)); }
+.orb-orbital--1 .electron--2 { transform: translateY(-50%) rotate(180deg) translateX(calc(var(--orb-diameter, 620px) * 0.185)); }
+
+.orb-orbital--2 .electron--1 { transform: translateY(-50%) translateX(calc(var(--orb-diameter, 620px) * 0.305)); }
+.orb-orbital--2 .electron--2 { transform: translateY(-50%) rotate(120deg) translateX(calc(var(--orb-diameter, 620px) * 0.305)); }
+.orb-orbital--2 .electron--3 { transform: translateY(-50%) rotate(240deg) translateX(calc(var(--orb-diameter, 620px) * 0.305)); }
+
+.orb-orbital--3 .electron--1 { transform: translateY(-50%) translateX(calc(var(--orb-diameter, 620px) * 0.37)); }
+.orb-orbital--3 .electron--2 { transform: translateY(-50%) rotate(180deg) translateX(calc(var(--orb-diameter, 620px) * 0.37)); }
 
 /* Electron streak trail */
-.orb-satellites i::before {
+.electron::before {
   content: '';
   position: absolute;
   right: 100%;
   top: 50%;
   height: 1px;
-  width: calc(var(--orb-diameter, 620px) * 0.12);
+  width: calc(var(--orb-diameter, 620px) * 0.08);
   background: linear-gradient(to right, transparent, rgba(var(--orb), 0.7));
   transform: translateY(-50%);
   pointer-events: none;
@@ -187,28 +210,10 @@ body {
   to { transform: rotate(360deg); }
 }
 
-/* Plane 1: Horizontal orbit */
-@keyframes orbit-plane-1 {
-  0% { transform: rotateX(0deg) rotateZ(0deg) rotateY(0deg); }
-  100% { transform: rotateX(0deg) rotateZ(0deg) rotateY(360deg); }
-}
-
-/* Plane 2: Tilted 65deg on X, -30deg on Z, rotating forward */
-@keyframes orbit-plane-2 {
-  0% { transform: rotateX(65deg) rotateZ(-30deg) rotateY(0deg); }
-  100% { transform: rotateX(65deg) rotateZ(-30deg) rotateY(360deg); }
-}
-
-/* Plane 3: Tilted -65deg on X, 50deg on Z, rotating backward */
-@keyframes orbit-plane-3 {
-  0% { transform: rotateX(-65deg) rotateZ(50deg) rotateY(0deg); }
-  100% { transform: rotateX(-65deg) rotateZ(50deg) rotateY(-360deg); }
-}
-
-/* Fade electrons behind nucleus and back */
-@keyframes electron-fade {
-  0%, 100%   { opacity: 1; }
-  45%, 55%   { opacity: 0.15; }
+/* Orbital rotation animation */
+@keyframes orbit-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
