@@ -127,16 +127,16 @@ body {
 .rigel-orb[data-state="thinking"] .orb-satellites { animation-duration: 5s; }
 .orb-satellites i {
   position: absolute;
-  width: 7px;
-  height: 7px;
+  width: calc(var(--orb-diameter, 620px) * 0.011);
+  height: calc(var(--orb-diameter, 620px) * 0.011);
   border-radius: 50%;
   background: rgb(var(--orb));
   box-shadow: 0 0 12px rgba(var(--orb), 0.9);
   top: 50%; left: 50%;
 }
-.orb-satellites i:nth-child(1) { transform: rotate(0deg) translateX(min(30vmin, 300px)); }
-.orb-satellites i:nth-child(2) { transform: rotate(130deg) translateX(min(30vmin, 300px)); }
-.orb-satellites i:nth-child(3) { transform: rotate(245deg) translateX(min(30vmin, 300px)); }
+.orb-satellites i:nth-child(1) { transform: rotate(0deg) translateX(calc(var(--orb-diameter, 620px) * 0.48)); }
+.orb-satellites i:nth-child(2) { transform: rotate(130deg) translateX(calc(var(--orb-diameter, 620px) * 0.48)); }
+.orb-satellites i:nth-child(3) { transform: rotate(245deg) translateX(calc(var(--orb-diameter, 620px) * 0.48)); }
 
 .orb-caption {
   font-family: var(--mono);
