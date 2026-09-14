@@ -40,6 +40,15 @@ export default function App() {
     });
   }
 
+  function handleOrbDrag(xPct, yPct) {
+    handleOrbConfigChange({
+      ...orbConfig,
+      position_corner: "custom",
+      x_pct: xPct,
+      y_pct: yPct,
+    });
+  }
+
   const caption =
     online === false
       ? "Offline — start the sidecar."
@@ -49,9 +58,9 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <header className="brandline">
+      <header className="brandline" data-tauri-drag-region>
         <span className="brand">RIGEL</span>
-        <span className="brand-sub">Responsive Interface for Graphical Execution &amp; Logistics</span>
+        <span className="brand-sub">Really Intelligent Graphical Execution Layer</span>
       </header>
 
       <main className="stage">
@@ -60,7 +69,10 @@ export default function App() {
           caption={caption}
           diameterPx={orbConfig.diameter_px}
           positionCorner={orbConfig.position_corner}
+          positionXPct={orbConfig.x_pct}
+          positionYPct={orbConfig.y_pct}
           isMinimized={orbConfig.is_minimized}
+          onDrag={handleOrbDrag}
         />
       </main>
 

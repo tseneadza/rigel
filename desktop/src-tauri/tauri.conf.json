@@ -15,11 +15,9 @@
         "title": "Rigel",
         "width": 1280,
         "height": 820,
-        "minWidth": 900,
-        "minHeight": 620,
         "resizable": true,
         "fullscreen": false,
-        "center": true,
+        "decorations": false,
         "backgroundColor": "#04070f"
       }
     ],

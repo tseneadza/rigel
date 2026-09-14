@@ -1,3 +1,7 @@
+import { useState } from "react";
+
+const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+
 /**
  * RigelOrb — Rigel's presence orb.
  *
@@ -14,23 +18,72 @@
  *   state           — "idle" | "thinking" | "speaking" (default "idle")
  *   caption         — short line under the orb (default "Standing by.")
  *   diameterPx     — fixed diameter in pixels, or undefined for responsive (default undefined)
- *   positionCorner — "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right" (default "center")
+ *   positionCorner — "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right" | "custom" (default "center")
+ *   positionXPct   — left offset as a % of the window, used when positionCorner is "custom"
+ *   positionYPct   — top offset as a % of the window, used when positionCorner is "custom"
  *   isMinimized    — hide caption if true (default false)
+ *   onDrag         — (xPct, yPct) => void, called when a drag ends
  */
 export default function RigelOrb({
   state = "idle",
   caption = "Standing by.",
   diameterPx = undefined,
   positionCorner = "center",
+  positionXPct = null,
+  positionYPct = null,
   isMinimized = false,
+  onDrag = () => {},
 }) {
+  const [drag, setDrag] = useState(null); // { xPct, yPct } while actively dragging
+  const [isDragging, setIsDragging] = useState(false);
+
+  const custom =
+    drag ||
+    (positionCorner === "custom" && positionXPct != null && positionYPct != null
+      ? { xPct: positionXPct, yPct: positionYPct }
+      : null);
+
+  function posFromEvent(e) {
+    return {
+      xPct: clamp((e.clientX / window.innerWidth) * 100, 4, 96),
+      yPct: clamp((e.clientY / window.innerHeight) * 100, 4, 96),
+    };
+  }
+
+  function handlePointerDown(e) {
+    if (e.button !== 0) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setIsDragging(true);
+    setDrag(posFromEvent(e));
+  }
+
+  function handlePointerMove(e) {
+    if (!isDragging) return;
+    setDrag(posFromEvent(e));
+  }
+
+  function handlePointerUp(e) {
+    if (!isDragging) return;
+    setIsDragging(false);
+    const final = posFromEvent(e);
+    setDrag(final);
+    onDrag(final.xPct, final.yPct);
+  }
+
   return (
     <div
       className="rigel-orb"
       data-state={state}
-      data-position={positionCorner}
+      data-position={custom ? "custom" : positionCorner}
       data-minimized={isMinimized}
-      style={diameterPx ? { "--orb-diameter": `${diameterPx}px` } : {}}
+      data-dragging={isDragging || undefined}
+      style={{
+        ...(diameterPx ? { "--orb-diameter": `${diameterPx}px` } : {}),
+        ...(custom ? { "--orb-x": `${custom.xPct}%`, "--orb-y": `${custom.yPct}%` } : {}),
+      }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
       role="img"
       aria-label={`Rigel — ${state}`}
     >

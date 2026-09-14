@@ -67,6 +67,11 @@ body {
   align-items: center;
   gap: 26px;
   user-select: none;
+  cursor: grab;
+  touch-action: none;
+}
+.rigel-orb[data-dragging="true"] {
+  cursor: grabbing;
 }
 .rigel-orb[data-state="thinking"] { --orb: 90, 170, 255; }
 .rigel-orb[data-state="speaking"] { --orb: 150, 225, 255; }
@@ -303,6 +308,13 @@ body {
   position: absolute;
   bottom: 160px;
   right: 20px;
+}
+
+.rigel-orb[data-position="custom"] {
+  position: absolute;
+  left: var(--orb-x, 50%);
+  top: var(--orb-y, 50%);
+  transform: translate(-50%, -50%);
 }
 
 .rigel-orb[data-minimized="true"] .orb-caption {

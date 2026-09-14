@@ -13,7 +13,7 @@ export default function ResizeControl({ orbConfig, onConfigChange }) {
   }
 
   function handleCornerClick(corner) {
-    onConfigChange({ ...orbConfig, position_corner: corner });
+    onConfigChange({ ...orbConfig, position_corner: corner, x_pct: null, y_pct: null });
   }
 
   function handleReset() {
@@ -21,6 +21,8 @@ export default function ResizeControl({ orbConfig, onConfigChange }) {
       diameter_px: 620,
       position_corner: "center",
       is_minimized: false,
+      x_pct: null,
+      y_pct: null,
     };
     setLocalDiameter(620);
     onConfigChange(defaultConfig);

@@ -50,6 +50,8 @@ class OrbConfig(BaseModel):
     diameter_px: int
     position_corner: str
     is_minimized: bool = False
+    x_pct: float | None = None
+    y_pct: float | None = None
 
 
 @app.get("/api/rigel/health")
@@ -97,9 +99,14 @@ def _validate_orb_config(config: OrbConfig) -> tuple[bool, str]:
     """Validate orb config values."""
     if not (60 <= config.diameter_px <= 620):
         return False, "diameter_px must be 60–620"
-    valid_corners = ("center", "top-left", "top-right", "bottom-left", "bottom-right")
+    valid_corners = ("center", "top-left", "top-right", "bottom-left", "bottom-right", "custom")
     if config.position_corner not in valid_corners:
         return False, f"position_corner must be one of {valid_corners}"
+    if config.position_corner == "custom":
+        if config.x_pct is None or config.y_pct is None:
+            return False, "x_pct and y_pct are required when position_corner is 'custom'"
+        if not (0 <= config.x_pct <= 100) or not (0 <= config.y_pct <= 100):
+            return False, "x_pct and y_pct must be between 0 and 100"
     return True, ""
 
 
