@@ -4,6 +4,7 @@ import ChatConsole from "./components/ChatConsole.jsx";
 import SettingsPanel from "./components/SettingsPanel.jsx";
 import { getLogs, getOrbConfig, saveOrbConfig } from "./api.js";
 import { restoreRestingBounds, shrinkToCorner } from "./nativeWindow.js";
+import { installToggleHotkey } from "./hotkey.js";
 
 const WORKING_DIAMETER_PX = 90;
 const WORKING_WINDOW_PX = WORKING_DIAMETER_PX + 40;
@@ -13,6 +14,7 @@ export default function App() {
   const [orbState, setOrbState] = useState("idle");
   const [online, setOnline] = useState(null); // null = unknown, true/false once probed
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [manualMinimize, setManualMinimize] = useState(false);
   const [orbConfig, setOrbConfig] = useState({
     diameter_px: 620,
     position_corner: "center",
@@ -28,6 +30,12 @@ export default function App() {
         setOnline(true);
       })
       .catch(() => setOnline(false));
+  }, []);
+
+  // Cmd+Shift+R toggles expansion/minimization by hand, on top of the
+  // automatic minimize-while-working below.
+  useEffect(() => {
+    return installToggleHotkey(() => setManualMinimize((m) => !m));
   }, []);
 
   function handleExchange(userMsg, res) {
@@ -62,30 +70,30 @@ export default function App() {
       ? "Working…"
       : "Standing by.";
 
-  // While Rigel is working, shrink down to just the orb — no header, no
-  // console — as a compact "working" indicator. Purely a visual override,
-  // never persisted, so the user's chosen resting size/position comes right
-  // back once orbState returns to "idle".
+  // Minimized to just the orb — no header, no console — either because
+  // Rigel is working (automatic) or because the hotkey toggled it by hand.
+  // Purely a visual override, never persisted, so the user's chosen resting
+  // size/position comes right back once it expands again.
   const isWorking = orbState === "thinking";
-  const displayDiameter = isWorking ? WORKING_DIAMETER_PX : orbConfig.diameter_px;
-  const displayCorner = isWorking ? "center" : orbConfig.position_corner;
-  const displayXPct = isWorking ? null : orbConfig.x_pct;
-  const displayYPct = isWorking ? null : orbConfig.y_pct;
+  const minimized = isWorking || manualMinimize;
+  const displayDiameter = minimized ? WORKING_DIAMETER_PX : orbConfig.diameter_px;
+  const displayCorner = minimized ? "center" : orbConfig.position_corner;
+  const displayXPct = minimized ? null : orbConfig.x_pct;
+  const displayYPct = minimized ? null : orbConfig.y_pct;
 
   // Shrink the real OS window (not just the CSS orb) down to a small
-  // borderless square in the corner while working, and restore it once the
-  // reply lands.
+  // borderless square while minimized, and restore it once expanded again.
   useEffect(() => {
-    if (isWorking) {
+    if (minimized) {
       shrinkToCorner({ widthPx: WORKING_WINDOW_PX, heightPx: WORKING_WINDOW_PX });
     } else {
       restoreRestingBounds();
     }
-  }, [isWorking]);
+  }, [minimized]);
 
   return (
     <div className="app-shell">
-      {!isWorking && (
+      {!minimized && (
         <header className="brandline" data-tauri-drag-region>
           <span className="brand">RIGEL</span>
           <span className="brand-sub">Really Intelligent Graphical Execution Layer</span>
@@ -108,17 +116,18 @@ export default function App() {
           positionCorner={displayCorner}
           positionXPct={displayXPct}
           positionYPct={displayYPct}
-          isMinimized={isWorking || orbConfig.is_minimized}
+          isMinimized={minimized || orbConfig.is_minimized}
           onDrag={handleOrbDrag}
         />
       </main>
 
-      {/* Kept mounted (just hidden) while working so an in-flight send isn't torn down mid-request. */}
-      <footer className="dock" style={isWorking ? { display: "none" } : undefined}>
+      {/* Kept mounted (just hidden) while minimized so an in-flight send isn't torn down mid-request. */}
+      <footer className="dock" style={minimized ? { display: "none" } : undefined}>
         <ChatConsole
           turns={turns}
           onExchange={handleExchange}
           onBusy={(b) => setOrbState(b ? "thinking" : "idle")}
+          hidden={minimized}
         />
       </footer>
 

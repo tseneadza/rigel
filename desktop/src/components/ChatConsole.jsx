@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import { sendChat } from "../api.js";
 
-export default function ChatConsole({ turns, onExchange, onBusy }) {
+export default function ChatConsole({ turns, onExchange, onBusy, hidden = false }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const scrollRef = useRef(null);
@@ -16,6 +16,15 @@ export default function ChatConsole({ turns, onExchange, onBusy }) {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [turns]);
+
+  // While `hidden` (display:none from the parent), the transcript has zero
+  // scrollHeight, so a message arriving during that time doesn't actually
+  // scroll into view above — catch up once it's shown again.
+  useEffect(() => {
+    if (hidden) return;
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [hidden]);
 
   async function submit(e) {
     e.preventDefault();

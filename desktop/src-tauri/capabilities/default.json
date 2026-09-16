@@ -8,6 +8,8 @@
   "permissions": [
     "core:default",
     "core:window:allow-set-size",
-    "core:window:allow-set-position"
+    "core:window:allow-set-position",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister"
   ]
 }

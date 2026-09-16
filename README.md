@@ -30,12 +30,12 @@ Rigel is in its **first slice**. What works today:
 * ✅ **Pluggable LLM brain** — pick **Claude** or a **local Ollama** model from Settings (⚙ → Brain). Ollama options are live-probed against this machine's RAM so you don't pick a model that will thrash. Falls back to the original regex stub if the chosen provider is unreachable. See [`docs/features/llm-brain.md`](docs/features/llm-brain.md).
 * ✅ **Auto-shrink while working** — the moment Rigel starts thinking, the header and full chat console disappear and the actual OS window (not just the CSS orb) shrinks down to a small borderless square holding *only* the orb — no title bar, no text input, nothing else — then restores its exact prior size/position and the full console once the reply lands.
 * ✅ **Deep-space look** — a solid black background with a scattered starfield and a soft nebula glow behind the orb; never transparent to the desktop.
+* ✅ **Hotkey expand/minimize** — **⌘⇧R** toggles the orb between full size and minimized (orb-only) by hand, layered on top of the automatic minimize-while-working above. It's a true OS-level global shortcut in the native app (works even when Rigel isn't focused).
 
 Deferred to later slices (scaffolded, not yet wired):
 
 * 🔜 **Voice I/O** — Rigel will get its own fresh STT/TTS pipeline.
 * 🔜 **Real command execution** — the OS-hook layer (open/close apps, file CRUD) runs behind approval gates. For now Rigel *detects and logs* command intents (now via a real LLM, still without executing them).
-* 🔜 **Hotkey-summoned input** — while the orb is shrunk to just itself, a global hotkey (not yet implemented) will be the way to bring the text input back rather than any click affordance on the orb.
 
 ---
 
