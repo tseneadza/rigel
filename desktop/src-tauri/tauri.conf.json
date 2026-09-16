@@ -10,6 +10,7 @@
     "beforeBuildCommand": "npm run build"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "Rigel",
@@ -18,7 +19,8 @@
         "resizable": true,
         "fullscreen": false,
         "decorations": false,
-        "backgroundColor": "#04070f"
+        "transparent": true,
+        "shadow": false
       }
     ],
     "security": {

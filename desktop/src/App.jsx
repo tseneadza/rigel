@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import RigelOrb from "./components/RigelOrb.jsx";
 import ChatConsole from "./components/ChatConsole.jsx";
 import SettingsPanel from "./components/SettingsPanel.jsx";
 import { getLogs, getOrbConfig, saveOrbConfig } from "./api.js";
+import { installClickThroughTracking, restoreRestingBounds, shrinkToCorner } from "./nativeWindow.js";
 
 const WORKING_DIAMETER_PX = 90;
 const WORKING_CORNER = "bottom-right";
@@ -27,6 +28,15 @@ export default function App() {
         setOnline(true);
       })
       .catch(() => setOnline(false));
+  }, []);
+
+  // The native OS window is transparent/borderless; let clicks fall through
+  // to the desktop everywhere except the header/orb/console — but never
+  // while Settings is open, since its backdrop needs to catch clicks too.
+  const settingsOpenRef = useRef(settingsOpen);
+  settingsOpenRef.current = settingsOpen;
+  useEffect(() => {
+    return installClickThroughTracking({ enabled: () => !settingsOpenRef.current });
   }, []);
 
   function handleExchange(userMsg, res) {
@@ -69,6 +79,17 @@ export default function App() {
   const displayCorner = isWorking ? WORKING_CORNER : orbConfig.position_corner;
   const displayXPct = isWorking ? null : orbConfig.x_pct;
   const displayYPct = isWorking ? null : orbConfig.y_pct;
+
+  // Shrink the real OS window (not just the CSS orb) down to a small
+  // borderless square in the corner while working, and restore it once the
+  // reply lands.
+  useEffect(() => {
+    if (isWorking) {
+      shrinkToCorner({ widthPx: WORKING_DIAMETER_PX + 60, heightPx: WORKING_DIAMETER_PX + 60 });
+    } else {
+      restoreRestingBounds();
+    }
+  }, [isWorking]);
 
   return (
     <div className="app-shell">
