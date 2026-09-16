@@ -45,6 +45,25 @@ body {
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--text-dim);
+  flex: 1;
+}
+
+.settings-btn {
+  border: 1px solid rgba(var(--ice), 0.25);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  width: 30px;
+  height: 30px;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.settings-btn:hover {
+  border-color: rgb(var(--ice));
+  color: rgb(var(--ice));
+  background: rgba(var(--ice), 0.08);
 }
 
 .stage {
@@ -449,3 +468,172 @@ body {
   }
   .corner-picker { flex-basis: 100%; }
 }
+
+/* ── settings modal ─────────────────────────────────────────────────────── */
+
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 5, 12, 0.72);
+  backdrop-filter: blur(4px);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+}
+
+.settings-panel {
+  width: min(480px, 92vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  border: 1px solid rgba(var(--ice), 0.25);
+  border-radius: 16px;
+  background: rgba(6, 12, 26, 0.96);
+  box-shadow: 0 0 60px rgba(var(--ice), 0.15);
+  padding: 20px 22px;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.settings-title {
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgb(var(--ice));
+}
+
+.settings-close {
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 14px;
+  cursor: pointer;
+}
+.settings-close:hover { color: rgb(var(--ice)); }
+
+.settings-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid rgba(var(--ice), 0.15);
+}
+
+.settings-tab {
+  padding: 8px 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.settings-tab.active {
+  color: rgb(var(--ice));
+  border-bottom-color: rgb(var(--ice));
+}
+
+.settings-body { font-size: 13px; }
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.settings-row label {
+  flex: 0 0 50px;
+  font-weight: 600;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.settings-row select,
+.settings-row input[type="text"] {
+  flex: 1;
+  background: rgba(var(--ice), 0.06);
+  border: 1px solid rgba(var(--ice), 0.2);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.provider-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(var(--ice), 0.15);
+}
+
+.provider-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--text);
+}
+.provider-option input { accent-color: rgb(var(--ice)); }
+
+.provider-detail { margin-bottom: 16px; }
+
+.settings-hint {
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 6px 0;
+}
+.settings-hint.ok { color: #7fe0a8; }
+.settings-hint.warn { color: #f0c674; }
+
+.settings-mono {
+  font-family: var(--mono);
+  background: rgba(var(--ice), 0.1);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.ollama-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.ollama-model-row {
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid rgba(var(--ice), 0.12);
+  border-radius: 8px;
+}
+.ollama-model-row .settings-hint { margin: 0; margin-left: auto; }
+
+.settings-save-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.settings-save-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 20px;
+  font-weight: 600;
+  font-size: 12px;
+  color: #04070f;
+  background: rgb(var(--ice));
+  cursor: pointer;
+}
+.settings-save-btn:disabled { opacity: 0.5; cursor: default; }

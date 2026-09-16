@@ -27,14 +27,14 @@ Rigel is in its **first slice**. What works today:
 * ✅ **Resizable, pinnable orb** — a size slider (60–620 px) and corner picker in the console let you shrink the orb into a corner; the choice persists across launches in a `settings` table.
 * ✅ **Text conversation loop** — talk to Rigel by typing; the transcript rehydrates from Rigel's own store on launch.
 * ✅ **Logging from day one** — every conversation turn *and* every command Rigel attempts is written to a local SQLite store (`~/.rigel/rigel.db`).
+* ✅ **Pluggable LLM brain** — pick **Claude** or a **local Ollama** model from Settings (⚙ → Brain). Ollama options are live-probed against this machine's RAM so you don't pick a model that will thrash. Falls back to the original regex stub if the chosen provider is unreachable. See [`docs/features/llm-brain.md`](docs/features/llm-brain.md).
 
 Deferred to later slices (scaffolded, not yet wired):
 
 * 🔜 **Auto-shrink while working** — the orb is meant to tuck into a corner while Rigel executes commands and act as a compact prompt; the shrink/expand triggers aren't wired yet.
 * 🔜 **Borderless / click-through window** — shrinking the actual Tauri window (not just the orb) with no OS chrome.
 * 🔜 **Voice I/O** — Rigel will get its own fresh STT/TTS pipeline.
-* 🔜 **Real command execution** — the OS-hook layer (open/close apps, file CRUD) runs behind approval gates. For now Rigel *detects and logs* command intents without executing them.
-* 🔜 **LLM brain** — the intent parser is a pluggable stub (`sidecar/brain.py`) with a clean seam for dropping in Claude.
+* 🔜 **Real command execution** — the OS-hook layer (open/close apps, file CRUD) runs behind approval gates. For now Rigel *detects and logs* command intents (now via a real LLM, still without executing them).
 
 ---
 
@@ -73,6 +73,9 @@ Rigel is a standalone **Tauri (Rust) + React** desktop app talking to a lean loc
 * **Rust** (stable) + the [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS
 * **Python 3.11+**
 * Supported platforms: macOS / Windows 11 / Linux (X11/Wayland)
+* Optional, only if you want a real LLM brain instead of the default stub:
+  an [Anthropic API key](https://console.anthropic.com/) and/or a local
+  [Ollama](https://ollama.com) install — see step 4 below.
 
 ### 1. Clone
 ```bash
@@ -100,6 +103,20 @@ If Vite complains that port 1425 is in use, a previous dev server is still runni
 
 The orb appears on launch. Type to Rigel; every turn and every detected command lands in `~/.rigel/rigel.db`.
 
+### 4. (Optional) Choose an LLM brain
+By default Rigel replies with a simple pattern-matching stub — no setup
+required. To have it reply through a real LLM instead, open Settings (⚙,
+top-right) → **Brain** tab and pick:
+* **Claude** — set `export ANTHROPIC_API_KEY=sk-ant-...` in the shell you
+  launch the sidecar from, then pick a model in Settings.
+* **Ollama (local)** — [install Ollama](https://ollama.com), pull a model
+  (`ollama pull llama3.2:3b`), then pick it in Settings — it's live-probed
+  against your machine's actual RAM so you can see which models will
+  actually run responsively.
+
+Full walkthrough (including a couple of environment gotchas worth knowing
+about): [`docs/setup/llm-brain.md`](docs/setup/llm-brain.md).
+
 ---
 
 ## 🗣️ Interactive Syntax Examples
@@ -122,12 +139,13 @@ curl http://127.0.0.1:5140/api/rigel/logs | python3 -m json.tool
 ```
 rigel/
 ├── desktop/          Tauri + React front end (the orb & console)
-│   ├── src/          React components (RigelOrb, ChatConsole, ResizeControl, App)
+│   ├── src/          React components (RigelOrb, ChatConsole, SettingsPanel, ResizeControl, App)
 │   └── src-tauri/    Rust/Tauri native shell
 └── sidecar/          Python FastAPI service
-    ├── app.py        routes: /chat /state /logs /health /settings/orb-config
-    ├── brain.py      reply + command-intent parser (LLM seam)
-    └── db.py         SQLite store: turns, command_attempts, settings
+    ├── app.py            routes: /chat /state /logs /health /settings/*
+    ├── brain.py          reply + command-intent dispatch (stub or LLM)
+    ├── llm_providers.py  Claude + Ollama backends, hardware/availability probing
+    └── db.py             SQLite store: turns, command_attempts, settings
 ```
 
 ---

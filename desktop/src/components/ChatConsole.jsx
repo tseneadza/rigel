@@ -6,9 +6,8 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { sendChat } from "../api.js";
-import ResizeControl from "./ResizeControl.jsx";
 
-export default function ChatConsole({ turns, onExchange, onBusy, orbConfig, onOrbConfigChange }) {
+export default function ChatConsole({ turns, onExchange, onBusy }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const scrollRef = useRef(null);
@@ -62,9 +61,6 @@ export default function ChatConsole({ turns, onExchange, onBusy, orbConfig, onOr
           {sending ? "…" : "Send"}
         </button>
       </form>
-      {orbConfig && onOrbConfigChange && (
-        <ResizeControl orbConfig={orbConfig} onConfigChange={onOrbConfigChange} />
-      )}
     </div>
   );
 }

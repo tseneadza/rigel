@@ -21,3 +21,15 @@ export const saveOrbConfig = (config) =>
     method: "POST",
     body: JSON.stringify(config),
   });
+export const getLlmConfig = () => req("/api/rigel/settings/llm-config");
+export const saveLlmConfig = (config) =>
+  req("/api/rigel/settings/llm-config", {
+    method: "POST",
+    body: JSON.stringify(config),
+  });
+export const getLlmOptions = (ollamaHost) =>
+  req(
+    `/api/rigel/settings/llm-options${
+      ollamaHost ? `?ollama_host=${encodeURIComponent(ollamaHost)}` : ""
+    }`
+  );

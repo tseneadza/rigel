@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import RigelOrb from "./components/RigelOrb.jsx";
 import ChatConsole from "./components/ChatConsole.jsx";
+import SettingsPanel from "./components/SettingsPanel.jsx";
 import { getLogs, getOrbConfig, saveOrbConfig } from "./api.js";
 
 export default function App() {
   const [turns, setTurns] = useState([]);
   const [orbState, setOrbState] = useState("idle");
   const [online, setOnline] = useState(null); // null = unknown, true/false once probed
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [orbConfig, setOrbConfig] = useState({
     diameter_px: 620,
     position_corner: "center",
@@ -61,6 +63,14 @@ export default function App() {
       <header className="brandline" data-tauri-drag-region>
         <span className="brand">RIGEL</span>
         <span className="brand-sub">Really Intelligent Graphical Execution Layer</span>
+        <button
+          className="settings-btn"
+          onClick={() => setSettingsOpen(true)}
+          aria-label="Open settings"
+          title="Settings"
+        >
+          ⚙
+        </button>
       </header>
 
       <main className="stage">
@@ -81,10 +91,15 @@ export default function App() {
           turns={turns}
           onExchange={handleExchange}
           onBusy={(b) => setOrbState(b ? "thinking" : "idle")}
-          orbConfig={orbConfig}
-          onOrbConfigChange={handleOrbConfigChange}
         />
       </footer>
+
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        orbConfig={orbConfig}
+        onOrbConfigChange={handleOrbConfigChange}
+      />
     </div>
   );
 }

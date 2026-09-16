@@ -11,6 +11,9 @@ Endpoints (all under /api/rigel):
     GET  /health  — liveness.
     GET  /settings/orb-config  — persisted orb size/position (or defaults).
     POST /settings/orb-config  — save orb size/position.
+    GET  /settings/llm-config  — persisted LLM brain provider/model (or defaults).
+    POST /settings/llm-config  — save LLM brain provider/model.
+    GET  /settings/llm-options — live-probed Claude/Ollama choices for the Settings UI.
 
 Forked in spirit from AgenticOS's sidecar; intentionally self-contained
 (SQLite, no MySQL, no AgenticOS imports).
@@ -23,7 +26,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from sidecar import brain, db
+from sidecar import brain, db, llm_providers
 
 RIGEL_PORT = int(os.getenv("RIGEL_PORT", "5140"))
 
@@ -54,6 +57,13 @@ class OrbConfig(BaseModel):
     y_pct: float | None = None
 
 
+class LLMConfig(BaseModel):
+    provider: str = "stub"                    # 'stub' | 'claude' | 'ollama'
+    claude_model: str | None = None
+    ollama_model: str | None = None
+    ollama_host: str = llm_providers.DEFAULT_OLLAMA_HOST
+
+
 @app.get("/api/rigel/health")
 def health() -> dict:
     return {"ok": True, "service": "rigel-sidecar", "version": "0.1.0"}
@@ -69,7 +79,8 @@ def state() -> dict:
 def chat(body: ChatIn) -> dict:
     user_turn_id = db.log_turn("user", body.text)
 
-    reply, commands = brain.respond(body.text)
+    llm_config = db.get_setting("llm_config")
+    reply, commands = brain.respond(body.text, llm_config)
 
     logged = []
     for cmd in commands:
@@ -130,6 +141,49 @@ def save_orb_config(body: OrbConfig) -> dict:
 
     db.set_setting("orb_config", body.model_dump())
     return {"ok": True}
+
+
+def _validate_llm_config(config: LLMConfig) -> tuple[bool, str]:
+    """Validate LLM brain config values."""
+    if config.provider not in ("stub", "claude", "ollama"):
+        return False, "provider must be one of 'stub', 'claude', 'ollama'"
+    if config.provider == "claude" and config.claude_model not in llm_providers.CLAUDE_MODELS:
+        return False, f"claude_model must be one of {llm_providers.CLAUDE_MODELS}"
+    if config.provider == "ollama":
+        if not config.ollama_model:
+            return False, "ollama_model is required when provider is 'ollama'"
+        if not config.ollama_host:
+            return False, "ollama_host is required when provider is 'ollama'"
+    return True, ""
+
+
+@app.get("/api/rigel/settings/llm-config")
+def get_llm_config() -> dict:
+    config = db.get_setting("llm_config")
+    if config:
+        return config
+    return LLMConfig().model_dump()
+
+
+@app.post("/api/rigel/settings/llm-config")
+def save_llm_config(body: LLMConfig) -> dict:
+    valid, msg = _validate_llm_config(body)
+    if not valid:
+        raise HTTPException(status_code=400, detail=msg)
+
+    db.set_setting("llm_config", body.model_dump())
+    return {"ok": True}
+
+
+@app.get("/api/rigel/settings/llm-options")
+def get_llm_options(ollama_host: str = llm_providers.DEFAULT_OLLAMA_HOST) -> dict:
+    return {
+        "claude": {
+            "models": llm_providers.CLAUDE_MODELS,
+            "api_key_configured": llm_providers.claude_api_key_configured(),
+        },
+        "ollama": llm_providers.probe_ollama(ollama_host),
+    }
 
 
 def main() -> None:
