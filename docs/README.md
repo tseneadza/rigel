@@ -6,11 +6,17 @@ Welcome to the Rigel documentation. This directory contains templates and guides
 
 Real, filled-in documentation (as opposed to the `TEMPLATE-*.md` files
 below) lives in `api/`, `architecture/`, `features/`, `setup/`, and
-`troubleshooting/`. First example — the LLM brain:
-- [Setup](setup/llm-brain.md) · [Feature](features/llm-brain.md) ·
+`troubleshooting/`. Examples:
+- **LLM brain:** [Setup](setup/llm-brain.md) · [Feature](features/llm-brain.md) ·
   [Architecture](architecture/llm-provider-selection.md) ·
   [API](api/llm-settings-endpoints.md) ·
   [Troubleshooting](troubleshooting/llm-brain.md)
+- **Orb minimize/expand** (auto-minimize while working, ⌘⇧R global
+  hotkey, deep-space look): [Feature](features/orb-minimize.md) ·
+  [Architecture](architecture/orb-minimize-state.md) ·
+  [Troubleshooting](troubleshooting/orb-minimize.md) — no setup or API
+  docs, since this feature needs no configuration and added no
+  endpoints.
 
 ## Quick Navigation
 
