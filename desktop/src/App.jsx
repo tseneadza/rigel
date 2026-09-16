@@ -4,6 +4,9 @@ import ChatConsole from "./components/ChatConsole.jsx";
 import SettingsPanel from "./components/SettingsPanel.jsx";
 import { getLogs, getOrbConfig, saveOrbConfig } from "./api.js";
 
+const WORKING_DIAMETER_PX = 90;
+const WORKING_CORNER = "bottom-right";
+
 export default function App() {
   const [turns, setTurns] = useState([]);
   const [orbState, setOrbState] = useState("idle");
@@ -58,6 +61,15 @@ export default function App() {
       ? "Working…"
       : "Standing by.";
 
+  // While Rigel is working, tuck the orb into a corner as a compact prompt —
+  // a purely visual override, never persisted, so the user's chosen resting
+  // size/position comes right back once orbState returns to "idle".
+  const isWorking = orbState === "thinking";
+  const displayDiameter = isWorking ? WORKING_DIAMETER_PX : orbConfig.diameter_px;
+  const displayCorner = isWorking ? WORKING_CORNER : orbConfig.position_corner;
+  const displayXPct = isWorking ? null : orbConfig.x_pct;
+  const displayYPct = isWorking ? null : orbConfig.y_pct;
+
   return (
     <div className="app-shell">
       <header className="brandline" data-tauri-drag-region>
@@ -77,11 +89,11 @@ export default function App() {
         <RigelOrb
           state={orbState}
           caption={caption}
-          diameterPx={orbConfig.diameter_px}
-          positionCorner={orbConfig.position_corner}
-          positionXPct={orbConfig.x_pct}
-          positionYPct={orbConfig.y_pct}
-          isMinimized={orbConfig.is_minimized}
+          diameterPx={displayDiameter}
+          positionCorner={displayCorner}
+          positionXPct={displayXPct}
+          positionYPct={displayYPct}
+          isMinimized={isWorking || orbConfig.is_minimized}
           onDrag={handleOrbDrag}
         />
       </main>

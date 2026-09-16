@@ -28,10 +28,10 @@ Rigel is in its **first slice**. What works today:
 * ✅ **Text conversation loop** — talk to Rigel by typing; the transcript rehydrates from Rigel's own store on launch.
 * ✅ **Logging from day one** — every conversation turn *and* every command Rigel attempts is written to a local SQLite store (`~/.rigel/rigel.db`).
 * ✅ **Pluggable LLM brain** — pick **Claude** or a **local Ollama** model from Settings (⚙ → Brain). Ollama options are live-probed against this machine's RAM so you don't pick a model that will thrash. Falls back to the original regex stub if the chosen provider is unreachable. See [`docs/features/llm-brain.md`](docs/features/llm-brain.md).
+* ✅ **Auto-shrink while working** — the orb tucks into its bottom-right corner as a compact prompt while Rigel is thinking, then springs back to your chosen resting size/position once the reply lands. Purely visual — your saved size/position preference is never overwritten.
 
 Deferred to later slices (scaffolded, not yet wired):
 
-* 🔜 **Auto-shrink while working** — the orb is meant to tuck into a corner while Rigel executes commands and act as a compact prompt; the shrink/expand triggers aren't wired yet.
 * 🔜 **Borderless / click-through window** — shrinking the actual Tauri window (not just the orb) with no OS chrome.
 * 🔜 **Voice I/O** — Rigel will get its own fresh STT/TTS pipeline.
 * 🔜 **Real command execution** — the OS-hook layer (open/close apps, file CRUD) runs behind approval gates. For now Rigel *detects and logs* command intents (now via a real LLM, still without executing them).

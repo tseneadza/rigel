@@ -88,9 +88,14 @@ body {
   user-select: none;
   cursor: grab;
   touch-action: none;
+  transition: top 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+    left 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+    right 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+    bottom 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .rigel-orb[data-dragging="true"] {
   cursor: grabbing;
+  transition: none;
 }
 .rigel-orb[data-state="thinking"] { --orb: 90, 170, 255; }
 .rigel-orb[data-state="speaking"] { --orb: 150, 225, 255; }
