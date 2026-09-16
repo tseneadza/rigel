@@ -1,8 +1,8 @@
 /**
- * Native window sync — makes the actual OS window (not just the CSS orb)
- * borderless, transparent, click-through, and shrink-to-fit while Rigel is
- * working. No-ops outside a Tauri webview (plain browser/dev preview) so the
- * rest of the app doesn't need to guard every call.
+ * Native window sync — shrinks the actual OS window (not just the CSS orb)
+ * down to a small corner square while Rigel is working, and restores it
+ * afterward. No-ops outside a Tauri webview (plain browser/dev preview) so
+ * the rest of the app doesn't need to guard every call.
  */
 const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -49,34 +49,4 @@ export async function restoreRestingBounds() {
   await win.setSize(restingBounds.size);
   await win.setPosition(restingBounds.position);
   restingBounds = null;
-}
-
-let ignoringCursor = false;
-export async function setClickThrough(shouldIgnore) {
-  if (shouldIgnore === ignoringCursor) return;
-  const win = await getCurrentWindow();
-  if (!win) return;
-  ignoringCursor = shouldIgnore;
-  await win.setIgnoreCursorEvents(shouldIgnore);
-}
-
-// Elements the mouse must be able to click normally; everywhere else on the
-// (now-transparent) window is desktop showing through, so we let clicks fall
-// through to whatever's behind Rigel.
-const INTERACTIVE_SELECTOR = ".brandline, .rigel-orb, .console, .settings-overlay";
-
-export function installClickThroughTracking({ enabled }) {
-  if (!isTauri()) return () => {};
-
-  function handleMove(e) {
-    if (!enabled()) {
-      setClickThrough(false);
-      return;
-    }
-    const overInteractive = e.target.closest(INTERACTIVE_SELECTOR) != null;
-    setClickThrough(!overInteractive);
-  }
-
-  window.addEventListener("mousemove", handleMove);
-  return () => window.removeEventListener("mousemove", handleMove);
 }

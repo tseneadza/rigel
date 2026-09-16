@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import RigelOrb from "./components/RigelOrb.jsx";
 import ChatConsole from "./components/ChatConsole.jsx";
 import SettingsPanel from "./components/SettingsPanel.jsx";
 import { getLogs, getOrbConfig, saveOrbConfig } from "./api.js";
-import { installClickThroughTracking, restoreRestingBounds, shrinkToCorner } from "./nativeWindow.js";
+import { restoreRestingBounds, shrinkToCorner } from "./nativeWindow.js";
 
 const WORKING_DIAMETER_PX = 90;
-const WORKING_CORNER = "bottom-right";
+const WORKING_WINDOW_PX = WORKING_DIAMETER_PX + 40;
 
 export default function App() {
   const [turns, setTurns] = useState([]);
@@ -28,15 +28,6 @@ export default function App() {
         setOnline(true);
       })
       .catch(() => setOnline(false));
-  }, []);
-
-  // The native OS window is transparent/borderless; let clicks fall through
-  // to the desktop everywhere except the header/orb/console — but never
-  // while Settings is open, since its backdrop needs to catch clicks too.
-  const settingsOpenRef = useRef(settingsOpen);
-  settingsOpenRef.current = settingsOpen;
-  useEffect(() => {
-    return installClickThroughTracking({ enabled: () => !settingsOpenRef.current });
   }, []);
 
   function handleExchange(userMsg, res) {
@@ -71,12 +62,13 @@ export default function App() {
       ? "Working…"
       : "Standing by.";
 
-  // While Rigel is working, tuck the orb into a corner as a compact prompt —
-  // a purely visual override, never persisted, so the user's chosen resting
-  // size/position comes right back once orbState returns to "idle".
+  // While Rigel is working, shrink down to just the orb — no header, no
+  // console — as a compact "working" indicator. Purely a visual override,
+  // never persisted, so the user's chosen resting size/position comes right
+  // back once orbState returns to "idle".
   const isWorking = orbState === "thinking";
   const displayDiameter = isWorking ? WORKING_DIAMETER_PX : orbConfig.diameter_px;
-  const displayCorner = isWorking ? WORKING_CORNER : orbConfig.position_corner;
+  const displayCorner = isWorking ? "center" : orbConfig.position_corner;
   const displayXPct = isWorking ? null : orbConfig.x_pct;
   const displayYPct = isWorking ? null : orbConfig.y_pct;
 
@@ -85,7 +77,7 @@ export default function App() {
   // reply lands.
   useEffect(() => {
     if (isWorking) {
-      shrinkToCorner({ widthPx: WORKING_DIAMETER_PX + 60, heightPx: WORKING_DIAMETER_PX + 60 });
+      shrinkToCorner({ widthPx: WORKING_WINDOW_PX, heightPx: WORKING_WINDOW_PX });
     } else {
       restoreRestingBounds();
     }
@@ -93,18 +85,20 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <header className="brandline" data-tauri-drag-region>
-        <span className="brand">RIGEL</span>
-        <span className="brand-sub">Really Intelligent Graphical Execution Layer</span>
-        <button
-          className="settings-btn"
-          onClick={() => setSettingsOpen(true)}
-          aria-label="Open settings"
-          title="Settings"
-        >
-          ⚙
-        </button>
-      </header>
+      {!isWorking && (
+        <header className="brandline" data-tauri-drag-region>
+          <span className="brand">RIGEL</span>
+          <span className="brand-sub">Really Intelligent Graphical Execution Layer</span>
+          <button
+            className="settings-btn"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Open settings"
+            title="Settings"
+          >
+            ⚙
+          </button>
+        </header>
+      )}
 
       <main className="stage">
         <RigelOrb
@@ -119,7 +113,8 @@ export default function App() {
         />
       </main>
 
-      <footer className="dock">
+      {/* Kept mounted (just hidden) while working so an in-flight send isn't torn down mid-request. */}
+      <footer className="dock" style={isWorking ? { display: "none" } : undefined}>
         <ChatConsole
           turns={turns}
           onExchange={handleExchange}
