@@ -24,3 +24,13 @@ log = "0.4"
 tauri = { version = "2.11.3", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-global-shortcut = "2"
+cpal = "0.17.1"
+hound = "3.5.1"
+rustpotter = "3.0.2"
+# Pinned: rustpotter -> candle-core 0.2.2 depends directly on rand_distr 0.4
+# (rand 0.8) but also lets `half` float to latest, and half >=2.5 switched to
+# rand 0.9/rand_distr 0.5 — the two versions coexisting breaks candle-core's
+# own Distribution<f16> impl. 2.4.1 is the last `half` release still on the
+# 0.8 lineage and satisfies candle-core's own ">=2.3.1" requirement.
+half = "=2.4.1"
+whisper-rs = "0.16.0"

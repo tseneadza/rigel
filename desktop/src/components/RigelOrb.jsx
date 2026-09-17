@@ -15,7 +15,7 @@ const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
  * on the root, so retuning a state color is a one-line change.
  *
  * Props:
- *   state           — "idle" | "thinking" | "speaking" (default "idle")
+ *   state           — "idle" | "recording" | "thinking" | "speaking" (default "idle")
  *   caption         — short line under the orb (default "Standing by.")
  *   diameterPx     — fixed diameter in pixels, or undefined for responsive (default undefined)
  *   positionCorner — "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right" | "custom" (default "center")

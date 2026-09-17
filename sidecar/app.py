@@ -14,6 +14,8 @@ Endpoints (all under /api/rigel):
     GET  /settings/llm-config  — persisted LLM brain provider/model (or defaults).
     POST /settings/llm-config  — save LLM brain provider/model.
     GET  /settings/llm-options — live-probed Claude/Ollama choices for the Settings UI.
+    GET  /settings/voice-config — persisted voice/TTS preferences (or defaults).
+    POST /settings/voice-config — save voice/TTS preferences.
 
 Forked in spirit from AgenticOS's sidecar; intentionally self-contained
 (SQLite, no MySQL, no AgenticOS imports).
@@ -62,6 +64,12 @@ class LLMConfig(BaseModel):
     claude_model: str | None = None
     ollama_model: str | None = None
     ollama_host: str = llm_providers.DEFAULT_OLLAMA_HOST
+
+
+class VoiceConfig(BaseModel):
+    tts_voice: str | None = None               # macOS voice name, e.g. "Samantha"
+    speak_typed_replies: bool = False          # speak replies to typed (not just voice) turns
+    enabled: bool = False                      # always-on wake-word listening
 
 
 @app.get("/api/rigel/health")
@@ -184,6 +192,20 @@ def get_llm_options(ollama_host: str = llm_providers.DEFAULT_OLLAMA_HOST) -> dic
         },
         "ollama": llm_providers.probe_ollama(ollama_host),
     }
+
+
+@app.get("/api/rigel/settings/voice-config")
+def get_voice_config() -> dict:
+    config = db.get_setting("voice_config")
+    if config:
+        return config
+    return VoiceConfig().model_dump()
+
+
+@app.post("/api/rigel/settings/voice-config")
+def save_voice_config(body: VoiceConfig) -> dict:
+    db.set_setting("voice_config", body.model_dump())
+    return {"ok": True}
 
 
 def main() -> None:

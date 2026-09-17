@@ -33,3 +33,9 @@ export const getLlmOptions = (ollamaHost) =>
       ollamaHost ? `?ollama_host=${encodeURIComponent(ollamaHost)}` : ""
     }`
   );
+export const getVoiceConfig = () => req("/api/rigel/settings/voice-config");
+export const saveVoiceConfig = (config) =>
+  req("/api/rigel/settings/voice-config", {
+    method: "POST",
+    body: JSON.stringify(config),
+  });

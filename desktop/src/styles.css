@@ -124,6 +124,7 @@ body {
 }
 .rigel-orb[data-state="thinking"] { --orb: 90, 170, 255; }
 .rigel-orb[data-state="speaking"] { --orb: 150, 225, 255; }
+.rigel-orb[data-state="recording"] { --orb: 255, 120, 90; }
 
 .orb-stage {
   position: relative;
