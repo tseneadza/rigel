@@ -6,7 +6,10 @@ Welcome to the Rigel documentation. This directory contains templates and guides
 
 Real, filled-in documentation (as opposed to the `TEMPLATE-*.md` files
 below) lives in `api/`, `architecture/`, `features/`, `setup/`, and
-`troubleshooting/`. Examples:
+`troubleshooting/`, plus two standalone cross-cutting references:
+[`GLOSSARY.md`](GLOSSARY.md) (terminology) and
+[`FILE-REFERENCE.md`](FILE-REFERENCE.md) (what every file is for).
+Examples:
 - **LLM brain:** [Setup](setup/llm-brain.md) · [Feature](features/llm-brain.md) ·
   [Architecture](architecture/llm-provider-selection.md) ·
   [API](api/llm-settings-endpoints.md) ·
@@ -17,6 +20,11 @@ below) lives in `api/`, `architecture/`, `features/`, `setup/`, and
   [Troubleshooting](troubleshooting/orb-minimize.md) — no setup or API
   docs, since this feature needs no configuration and added no
   endpoints.
+- **Voice I/O** (wake word → whisper.cpp → spoken reply, all on-device):
+  [Setup](setup/voice.md) · [Feature](features/voice-pipeline.md) ·
+  [Architecture](architecture/voice-pipeline.md) ·
+  [API](api/voice-settings-endpoints.md) ·
+  [Troubleshooting](troubleshooting/voice-pipeline.md)
 
 ## Quick Navigation
 
@@ -24,7 +32,9 @@ below) lives in `api/`, `architecture/`, `features/`, `setup/`, and
 1. **Start here:** [Setup Guide](TEMPLATE-SETUP-GUIDE.md) - Get Rigel running on your machine
 2. **Then read:** [Architecture Overview](TEMPLATE-ARCHITECTURE.md) - Understand how components work together
 3. **Explore:** [Component Documentation](TEMPLATE-COMPONENT.md) - Learn about specific modules
-4. **Get stuck?** [Troubleshooting Guide](TEMPLATE-TROUBLESHOOTING.md) - Debug common issues
+4. **Look up terms:** [Glossary & Technical Terms](GLOSSARY.md) - Product concepts, architecture components, and data-model vocabulary
+5. **Find a file:** [File Reference](FILE-REFERENCE.md) - Every tracked file's purpose, and what each extension means
+6. **Get stuck?** [Troubleshooting Guide](TEMPLATE-TROUBLESHOOTING.md) - Debug common issues
 
 ### For Developers Working on Features
 1. [Feature Documentation](TEMPLATE-FEATURE.md) - How to document new features

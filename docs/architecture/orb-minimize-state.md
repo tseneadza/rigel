@@ -35,7 +35,11 @@ hotkey) that must not fight each other.
 - **Location:** `desktop/src/App.jsx`
 - **Purpose:** Single source of truth for whether Rigel is minimized,
   combining two independent signals with OR:
-  `const minimized = isWorking || manualMinimize;`
+  `const minimized = autoMinimized || manualMinimize;` where
+  `autoMinimized` follows `isWorking` (`orbState === "thinking"`) only
+  after it has been continuously true for `WORKING_MINIMIZE_DELAY_MS`
+  (2.5 s) — a debounce added once live voice testing showed sub-second
+  round trips making the window flicker.
 - **Why OR, not a single state machine:** `isWorking` is *transient* and
   owned by the request lifecycle (`ChatConsole.onBusy`); `manualMinimize`
   is a *sticky* user choice toggled by the hotkey. OR means: a request

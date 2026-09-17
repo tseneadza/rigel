@@ -28,13 +28,13 @@ Rigel is in its **first slice**. What works today:
 * ✅ **Text conversation loop** — talk to Rigel by typing; the transcript rehydrates from Rigel's own store on launch.
 * ✅ **Logging from day one** — every conversation turn *and* every command Rigel attempts is written to a local SQLite store (`~/.rigel/rigel.db`).
 * ✅ **Pluggable LLM brain** — pick **Claude** or a **local Ollama** model from Settings (⚙ → Brain). Ollama options are live-probed against this machine's RAM so you don't pick a model that will thrash. Falls back to the original regex stub if the chosen provider is unreachable. See [`docs/features/llm-brain.md`](docs/features/llm-brain.md).
-* ✅ **Auto-shrink while working** — the moment Rigel starts thinking, the header and full chat console disappear and the actual OS window (not just the CSS orb) shrinks down to a small borderless square holding *only* the orb — no title bar, no text input, nothing else — then restores its exact prior size/position and the full console once the reply lands.
+* ✅ **Voice I/O, fully on-device** — say your trained wake word ("Rigel"), then a command; rustpotter matches the wake word against your own recordings, whisper.cpp transcribes, the reply is spoken with a macOS voice. Rigel goes deaf while it talks so it can't hear itself. Set up in ⚙ → Voice. See [`docs/features/voice-pipeline.md`](docs/features/voice-pipeline.md).
+* ✅ **Auto-shrink while working** — once Rigel has been thinking for a couple of seconds, the header and full chat console disappear and the actual OS window (not just the CSS orb) shrinks down to a small borderless square holding *only* the orb — no title bar, no text input, nothing else — then restores its exact prior size/position and the full console once the reply lands. Quick exchanges (a voice command, a stub reply) finish before the shrink kicks in, so the window holds still.
 * ✅ **Deep-space look** — a solid black background with a scattered starfield and a soft nebula glow behind the orb; never transparent to the desktop.
 * ✅ **Hotkey expand/minimize** — **⌘⇧R** toggles the orb between full size and minimized (orb-only) by hand, layered on top of the automatic minimize-while-working above. It's a true OS-level global shortcut in the native app (works even when Rigel isn't focused). See [`docs/features/orb-minimize.md`](docs/features/orb-minimize.md).
 
 Deferred to later slices (scaffolded, not yet wired):
 
-* 🔜 **Voice I/O** — Rigel will get its own fresh STT/TTS pipeline.
 * 🔜 **Real command execution** — the OS-hook layer (open/close apps, file CRUD) runs behind approval gates. For now Rigel *detects and logs* command intents (now via a real LLM, still without executing them).
 
 ---
@@ -44,7 +44,7 @@ Deferred to later slices (scaffolded, not yet wired):
 Rigel is a standalone **Tauri (Rust) + React** desktop app talking to a lean local **Python (FastAPI) sidecar**, which owns Rigel's private log/memory store. It reuses the visual and structural patterns of the OSA orb but shares no runtime or database with it.
 
 ```text
-                    [ USER PROMPT (text · voice later) ]
+                    [ USER PROMPT (typed · or spoken: wake word → whisper.cpp, in-process) ]
                                    │
                                    ▼
 ┌───────────────────────────────────────────────────────┐
@@ -122,7 +122,8 @@ about): [`docs/setup/llm-brain.md`](docs/setup/llm-brain.md).
 
 ## 🗣️ Interactive Syntax Examples
 
-Once the orb is up, talk to Rigel (voice arrives in a later slice):
+Once the orb is up, talk to Rigel — type, or (after the one-time set-up in
+[`docs/setup/voice.md`](docs/setup/voice.md)) say the wake word and speak:
 
 > **User:** *"Rigel, open VS Code and Chrome side-by-side."*
 >
@@ -141,9 +142,11 @@ curl http://127.0.0.1:5140/api/rigel/logs | python3 -m json.tool
 rigel/
 ├── desktop/          Tauri + React front end (the orb & console)
 │   ├── src/          React components (RigelOrb, ChatConsole, SettingsPanel, ResizeControl, App)
+│   │                 + voice.js (native voice commands/events), nativeWindow.js, hotkey.js
 │   └── src-tauri/    Rust/Tauri native shell
+│       └── src/voice/  wake word (rustpotter) · STT (whisper.cpp) · TTS (`say`) · listener
 └── sidecar/          Python FastAPI service
-    ├── app.py            routes: /chat /state /logs /health /settings/*
+    ├── app.py            routes: /chat /state /logs /health /settings/{orb,llm,voice}-config
     ├── brain.py          reply + command-intent dispatch (stub or LLM)
     ├── llm_providers.py  Claude + Ollama backends, hardware/availability probing
     └── db.py             SQLite store: turns, command_attempts, settings
@@ -153,7 +156,7 @@ rigel/
 
 ## 🤝 Contributing
 
-Contributions to Rigel are welcome — whether you're building the voice pipeline, wiring the OS-hook execution layer behind approval gates, dropping a real LLM into `brain.py`, or refining the HUD. Fork the repo and open a Pull Request.
+Contributions to Rigel are welcome — whether you're hardening the voice pipeline (noise robustness, barge-in), wiring the OS-hook execution layer behind approval gates, dropping a real LLM into `brain.py`, or refining the HUD. Fork the repo and open a Pull Request.
 
 ---
 

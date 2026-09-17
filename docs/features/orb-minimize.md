@@ -14,10 +14,15 @@ nebula glow behind the orb), never transparent to the desktop.
 - [ ] Production
 
 ## User-Facing Description
-- **While Rigel is thinking:** the moment you send a message, the header
-  and the whole chat console disappear and the actual OS window shrinks
-  to a small square holding only the orb. As soon as the reply lands, it
-  restores your exact prior window size/position and the full console.
+- **While Rigel is thinking:** once a request has been in flight for
+  2.5 s (`WORKING_MINIMIZE_DELAY_MS`), the header and the whole chat
+  console disappear and the actual OS window shrinks to a small square
+  holding only the orb. As soon as the reply lands, it restores your exact
+  prior window size/position and the full console. Replies that arrive
+  faster than that — a voice command round trip, the regex stub — never
+  move the window at all; shrinking and restoring for a sub-second wait
+  read as the window vanishing and popping back (found live 2026-09-17).
+  Recording a spoken command (orange orb) never minimizes either.
 - **By hand, anytime:** press **⌘⇧R** to toggle between full size and
   minimized. This is independent of the auto-minimize above — if you
   minimize by hand while Rigel is mid-reply, it stays minimized once the
@@ -35,7 +40,7 @@ Cmd+Shift+R (OS-level, via tauri-plugin-global-shortcut)
         ▼
 App.jsx: manualMinimize (bool, toggled)  ───┐
                                              ├──▶ minimized = isWorking || manualMinimize
-ChatConsole.onBusy(true/false) ─────────────┘         │
+ChatConsole.onBusy / voice transcript ──────┘         │  (isWorking → autoMinimized after 2.5 s)
         │                                             ▼
         │                                  header/console hidden (display:none)
         │                                  orb re-centered + shrunk (CSS)
@@ -90,8 +95,9 @@ None. The hotkey is hardcoded to `CmdOrCtrl+Shift+R` in `hotkey.js`
 ```
 [Rigel full size, black starfield background]
 User: "open Chrome and Safari"
-  → window instantly shrinks to just the orb, header/console gone
-  → reply arrives → window restores to prior size, console back
+  → if the reply takes > 2.5 s: window shrinks to just the orb,
+    header/console gone; reply arrives → window restores
+  → if the reply is quick: nothing moves
 [Press ⌘⇧R anytime] → orb-only, no console
 [Press ⌘⇧R again]   → back to full size
 ```
