@@ -60,7 +60,7 @@ the full exclusion list.
 | [`api.js`](../desktop/src/api.js) | Thin `fetch` wrapper for every sidecar endpoint (`/state`, `/logs`, `/chat`, orb/LLM/voice settings). Base URL overridable via `VITE_RIGEL_API`. |
 | [`voice.js`](../desktop/src/voice.js) | Wrappers for every native voice command (`speak`, `enrollWakeword`, `downloadSttModel`, `setVoiceEnabled`, …) and `voice://…` event (`onTranscript`, `onVoiceState`, …); `subscribeInEffect` (leak-safe Tauri event subscription for React effects) and `looksLikeSpeech` (rejects whisper's `[BLANK_AUDIO]`-style output). No-ops outside a Tauri webview. |
 | [`hotkey.js`](../desktop/src/hotkey.js) | Registers the global `Cmd/Ctrl+Shift+R` toggle — real OS-level shortcut in Tauri, `keydown`-listener fallback in a plain browser. |
-| [`nativeWindow.js`](../desktop/src/nativeWindow.js) | Resizes/repositions the *actual* OS window (`shrinkToCorner` / `restoreRestingBounds`) — a no-op outside a Tauri webview. |
+| [`nativeWindow.js`](../desktop/src/nativeWindow.js) | Resizes/repositions the *actual* OS window (`shrinkToCorner` / `restoreRestingBounds`) and toggles its drop shadow off while minimized — a no-op outside a Tauri webview. |
 | [`styles.css`](../desktop/src/styles.css) | The single global stylesheet: CSS custom properties for the palette, the starfield/nebula background, and every component's layout and animation. |
 
 ### `desktop/src/components/`
@@ -80,7 +80,7 @@ the full exclusion list.
 | `Cargo.lock` | Exact resolved Rust dependency tree; not hand-edited. |
 | [`Info.plist`](../desktop/src-tauri/Info.plist) | Extra bundle keys Tauri merges into the app's `Info.plist` — the microphone usage description macOS shows on first mic access. |
 | [`build.rs`](../desktop/src-tauri/build.rs) | Cargo build script, runs before compilation — here it just invokes `tauri_build::build()` to generate Tauri's own codegen (icons, config embedding, etc.). |
-| [`tauri.conf.json`](../desktop/src-tauri/tauri.conf.json) | Tauri's main config: window chrome (borderless — `decorations: false`, size, background color), dev-server URL, build commands, bundle icon set. |
+| [`tauri.conf.json`](../desktop/src-tauri/tauri.conf.json) | Tauri's main config: window chrome (borderless — `decorations: false`, size, `transparent: true` + `macOSPrivateApi` so the minimized orb has no background; the full-size starfield is CSS), dev-server URL, build commands, bundle icon set. |
 | [`.gitignore`](../desktop/src-tauri/.gitignore) | Rust-specific ignores — `/target/` (compiled output) and `/gen/schemas` (Tauri-generated permission schemas). |
 | [`src/main.rs`](../desktop/src-tauri/src/main.rs) | Binary entry point — just calls into `app_lib::run()`. The `windows_subsystem` attribute suppresses a console window on Windows release builds. |
 | [`src/lib.rs`](../desktop/src-tauri/src/lib.rs) | The actual Tauri app setup: registers the global-shortcut plugin, the voice commands and managed state, file logging (20 MB × 3, release builds included, at `~/Library/Logs/com.tonyseneadza.rigel/`), and starts the Tauri runtime. |

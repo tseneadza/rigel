@@ -41,6 +41,9 @@ export async function shrinkToCorner({ widthPx, heightPx, marginPx = 24 }) {
   const y = screen.position.y + screen.size.height - height - margin;
   await win.setSize(new PhysicalSize(width, height));
   await win.setPosition(new PhysicalPosition(x, y));
+  // No drop shadow while the window is a transparent square holding only
+  // the orb — macOS would otherwise outline the invisible window edge.
+  await win.setShadow(false).catch(() => {});
 }
 
 export async function restoreRestingBounds() {
@@ -48,5 +51,6 @@ export async function restoreRestingBounds() {
   if (!win || !restingBounds) return;
   await win.setSize(restingBounds.size);
   await win.setPosition(restingBounds.position);
+  await win.setShadow(true).catch(() => {});
   restingBounds = null;
 }

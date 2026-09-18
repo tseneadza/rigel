@@ -10,6 +10,7 @@
     "core:event:default",
     "core:window:allow-set-size",
     "core:window:allow-set-position",
+    "core:window:allow-set-shadow",
     "global-shortcut:allow-register",
     "global-shortcut:allow-unregister"
   ]

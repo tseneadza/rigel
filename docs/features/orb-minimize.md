@@ -27,9 +27,11 @@ nebula glow behind the orb), never transparent to the desktop.
   minimized. This is independent of the auto-minimize above — if you
   minimize by hand while Rigel is mid-reply, it stays minimized once the
   reply finishes (your manual choice wins).
-- **Look:** the window is always a solid black background with a
+- **Look:** at full size the window is a solid black background with a
   scattered starfield and soft nebula glow — it reads as deep space, not
-  a transparent overlay.
+  a transparent overlay. **While minimized, there is no background at
+  all**: the small window is transparent and only the orb (and its glow)
+  is drawn, so it floats over whatever is behind it with no black square.
 
 ## Technical Implementation
 

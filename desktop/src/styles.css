@@ -10,6 +10,7 @@
 * { box-sizing: border-box; }
 
 html, body, #root { height: 100%; margin: 0; }
+html { background: transparent; }
 
 /* A scattered starfield + soft nebula glow, so the app itself reads as
    deep space rather than a plain dark rectangle. */
@@ -37,6 +38,13 @@ body {
   color: var(--text);
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   overflow: hidden;
+}
+
+/* Minimized to the bare orb: the OS window is transparent-capable, and with
+   the starfield removed here nothing but the orb (and its glow) is drawn —
+   no black square around it. Full size stays fully opaque. */
+body[data-minimized="true"] {
+  background: transparent;
 }
 
 /* ── layout ─────────────────────────────────────────────────────────────── */

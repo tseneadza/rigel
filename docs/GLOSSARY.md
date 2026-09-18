@@ -33,9 +33,11 @@ The README's framing for the orb's role: the fixed point the user looks to
 in order to act on the OS, replacing manual folder/menu navigation.
 
 **Deep-space look**
-The window's visual treatment: a solid black background with a scattered
-starfield and soft nebula glow behind the orb — opaque, never transparent
-to the desktop. See
+The full-size window's visual treatment: a solid black background with a
+scattered starfield and soft nebula glow behind the orb — opaque, never
+transparent to the desktop. Painted by CSS on `body`, not by the OS
+window, which is created transparent-capable so that the **minimized**
+view can drop the background and show only the orb. See
 [`docs/features/orb-minimize.md`](features/orb-minimize.md) and
 [`docs/architecture/orb-minimize-state.md`](architecture/orb-minimize-state.md)
 (the "Alternative Approaches" section documents why a click-through,

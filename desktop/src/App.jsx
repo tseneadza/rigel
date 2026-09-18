@@ -182,6 +182,9 @@ export default function App() {
   // Shrink the real OS window (not just the CSS orb) down to a small
   // borderless square while minimized, and restore it once expanded again.
   useEffect(() => {
+    // Drives `body[data-minimized]` — the CSS drops the opaque starfield so
+    // the (transparent-capable) window shows only the orb while shrunk.
+    document.body.dataset.minimized = minimized ? "true" : "false";
     if (minimized) {
       shrinkToCorner({ widthPx: WORKING_WINDOW_PX, heightPx: WORKING_WINDOW_PX });
     } else {

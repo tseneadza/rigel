@@ -144,19 +144,25 @@ hotkey) that must not fight each other.
 | `@tauri-apps/api` (`window`, `dpi`) | ^2.11.1 | Real window resize/position | MIT/Apache-2.0 |
 
 ## Alternative Approaches Considered
-- **Transparent, click-through window (rejected):** an earlier pass made
-  the whole window transparent (`transparent: true` +
-  `macOSPrivateApi: true`) with `setIgnoreCursorEvents` toggled via a
-  `mousemove` hit-test, so clicks would fall through to the desktop
-  outside the header/orb/console. Explicitly rejected per design
-  feedback: the full-size window should look like solid "outer space"
-  (opaque black + starfield), never see-through to the desktop, and the
-  minimized view should show *only* the orb rather than a transparent
-  gap where the console used to be. Reverted in favor of the current
-  opaque-always design; `nativeWindow.js` dropped
-  `setClickThrough`/`installClickThroughTracking` entirely, and
-  `tauri.conf.json` dropped `transparent`/`macOSPrivateApi` along with
-  the matching Cargo feature flag and capability permission.
+- **Transparent, click-through window at full size (rejected):** an
+  earlier pass made the whole window transparent with
+  `setIgnoreCursorEvents` toggled via a `mousemove` hit-test, so clicks
+  would fall through to the desktop outside the header/orb/console.
+  Rejected per design feedback: the full-size window should look like
+  solid "outer space" (opaque black + starfield), never see-through, and
+  the minimized view should show *only* the orb rather than a transparent
+  gap where the console used to be. `nativeWindow.js` dropped the
+  click-through tracking entirely.
+- **Transparent *only while minimized* (current, 2026-09-17):** the
+  window is created transparent-capable (`transparent: true` +
+  `macOSPrivateApi: true` + the `macos-private-api` Cargo feature) but
+  the **CSS** paints the opaque starfield on `body`, so full size looks
+  exactly as before. `App.jsx` sets `body[data-minimized="true"]` while
+  shrunk, which removes that background — the 130 px square then shows
+  nothing but the orb. `shrinkToCorner`/`restoreRestingBounds` also turn
+  the OS window shadow off/on (`core:window:allow-set-shadow`) so macOS
+  doesn't outline the invisible square. No click-through: the window is
+  tiny and mostly orb, so clicks landing on it are fine.
 - **Unmounting `ChatConsole` while minimized (rejected):** would avoid
   needing the `hidden` prop/scroll-catch-up fix, but risks tearing down
   the component mid-request (see Concurrency section above) — the
