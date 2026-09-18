@@ -25,6 +25,7 @@ const WORKING_MINIMIZE_DELAY_MS = 2500;
 
 export default function App() {
   const [turns, setTurns] = useState([]);
+  const [pendingCommands, setPendingCommands] = useState([]);
   const [orbState, setOrbState] = useState("idle");
   const [online, setOnline] = useState(null); // null = unknown, true/false once probed
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -123,10 +124,22 @@ export default function App() {
       { role: "rigel", text: res.reply },
     ]);
     setOnline(true);
+    const pending = (res.commands || []).filter((c) => c.status === "pending");
+    if (pending.length > 0) {
+      setPendingCommands((prev) => [...prev, ...pending]);
+    }
     const shouldSpeak = source === "voice" || voiceConfigRef.current.speak_typed_replies;
     if (shouldSpeak) {
       speak(res.reply, voiceConfigRef.current.tts_voice).catch(() => setOrbState("idle"));
     }
+  }
+
+  // A pending command was approved/denied — drop it from the queue and note
+  // the outcome in the transcript, same as any other Rigel turn.
+  function handleCommandResolved(updated) {
+    setPendingCommands((prev) => prev.filter((c) => c.id !== updated.id));
+    const icon = updated.status === "ok" ? "✅" : updated.status === "rejected" ? "🚫" : "⚠";
+    setTurns((prev) => [...prev, { role: "rigel", text: `${icon} ${updated.detail}` }]);
   }
 
   function handleOrbConfigChange(newConfig) {
@@ -235,6 +248,8 @@ export default function App() {
             else if (!voiceBusyRef.current) setOrbState("idle");
           }}
           hidden={minimized}
+          pendingCommands={pendingCommands}
+          onCommandResolved={handleCommandResolved}
         />
       </footer>
 

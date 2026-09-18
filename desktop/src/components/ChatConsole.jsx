@@ -6,8 +6,16 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { sendChat } from "../api.js";
+import CommandApproval from "./CommandApproval.jsx";
 
-export default function ChatConsole({ turns, onExchange, onBusy, hidden = false }) {
+export default function ChatConsole({
+  turns,
+  onExchange,
+  onBusy,
+  hidden = false,
+  pendingCommands = [],
+  onCommandResolved,
+}) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const scrollRef = useRef(null);
@@ -58,6 +66,7 @@ export default function ChatConsole({ turns, onExchange, onBusy, hidden = false 
           ))
         )}
       </div>
+      <CommandApproval commands={pendingCommands} onResolved={onCommandResolved} />
       <form className="composer" onSubmit={submit}>
         <input
           type="text"

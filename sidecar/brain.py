@@ -1,9 +1,9 @@
 """Rigel's brain — turns user text into a reply + a list of command intents.
 
 ``respond(text, llm_config)`` returns ``(reply, commands)`` where ``commands``
-is a list of ``{action, args}`` dicts Rigel *would* execute. Command execution
-itself is still deferred (separate project scope) — every provider, stub or
-LLM, only detects and logs intent.
+is a list of ``{action, args}`` dicts. Every provider, stub or LLM, only
+detects intent — it never executes anything itself. Execution (behind an
+explicit approval step) lives in ``executor.py``, wired up in ``app.py``.
 
 When ``llm_config`` selects a real provider (Claude or Ollama, see
 ``llm_providers.py``), that provider produces both the reply and the
@@ -51,11 +51,11 @@ def _stub_respond(text: str) -> tuple[str, list[dict]]:
     if commands:
         actions = ", ".join(c["action"].replace("_", " ") for c in commands)
         reply = (
-            f"Understood. I would {actions} — but command execution is not wired "
-            f"up yet, so I've logged the intent instead. What's next?"
+            f"Understood. I've logged that and I'm waiting on your approval to "
+            f"{actions} — check the console. What's next?"
         )
     else:
-        reply = f'Received: "{text}". My execution layer is still coming online — '\
+        reply = f'Received: "{text}". Nothing to act on there — '\
                 f"for now I'm logging our conversation. What is our next objective?"
     return (reply, commands)
 

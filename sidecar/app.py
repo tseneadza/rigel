@@ -4,8 +4,13 @@ Run standalone (dev):
     ./.venv/bin/python -m sidecar          # binds RIGEL_PORT or 5140
 
 Endpoints (all under /api/rigel):
-    POST /chat    — send a user message; logs the turn, logs any command
-                    intents (as 'deferred'), returns Rigel's reply.
+    POST /chat    — send a user message; logs the turn, previews + logs any
+                    command intents ('pending' or 'blocked'), returns
+                    Rigel's reply.
+    POST /commands/{id}/approve — execute a pending command; updates its
+                    status to 'ok' or 'error'.
+    POST /commands/{id}/reject  — mark a pending command 'rejected'; never
+                    executes it.
     GET  /state   — current orb state ('idle' | 'thinking' | 'speaking').
     GET  /logs    — recent conversation turns + command attempts.
     GET  /health  — liveness.
@@ -28,7 +33,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from sidecar import brain, db, llm_providers
+from sidecar import brain, db, executor, llm_providers
 
 RIGEL_PORT = int(os.getenv("RIGEL_PORT", "5140"))
 
@@ -92,18 +97,56 @@ def chat(body: ChatIn) -> dict:
 
     logged = []
     for cmd in commands:
+        try:
+            resolved_args = executor.preview(cmd["action"], cmd["args"])
+            status, detail = "pending", "Awaiting approval."
+        except executor.UnsafeCommandError as e:
+            resolved_args, status, detail = cmd["args"], "blocked", str(e)
+
         cmd_id = db.log_command(
             action=cmd["action"],
-            args=cmd["args"],
-            status="deferred",                     # execution not wired up yet
-            detail="Intent detected; execution layer not implemented.",
+            args=resolved_args,
+            status=status,
+            detail=detail,
             turn_id=user_turn_id,
         )
-        logged.append({"id": cmd_id, **cmd, "status": "deferred"})
+        logged.append({"id": cmd_id, "action": cmd["action"], "args": resolved_args, "status": status, "detail": detail})
+
+    # brain.respond() writes its reply before knowing which commands turned
+    # out unsafe — correct it here rather than teaching every brain
+    # (stub + each LLM provider) about blocking.
+    blocked = [c for c in logged if c["status"] == "blocked"]
+    if blocked:
+        reply += " " + " ".join(f"⚠ Blocked: {c['detail']}" for c in blocked)
 
     db.log_turn("rigel", reply)
 
     return {"reply": reply, "commands": logged}
+
+
+def _pending_command_or_404(command_id: int) -> dict:
+    cmd = db.get_command(command_id)
+    if cmd is None:
+        raise HTTPException(status_code=404, detail="command not found")
+    if cmd["status"] != "pending":
+        raise HTTPException(status_code=404, detail=f"command is '{cmd['status']}', not pending")
+    return cmd
+
+
+@app.post("/api/rigel/commands/{command_id}/approve")
+def approve_command(command_id: int) -> dict:
+    cmd = _pending_command_or_404(command_id)
+    status, detail = executor.execute(cmd["action"], cmd["args"])
+    db.update_command_status(command_id, status, detail)
+    return {**cmd, "status": status, "detail": detail}
+
+
+@app.post("/api/rigel/commands/{command_id}/reject")
+def reject_command(command_id: int) -> dict:
+    cmd = _pending_command_or_404(command_id)
+    detail = "Rejected by user."
+    db.update_command_status(command_id, "rejected", detail)
+    return {**cmd, "status": "rejected", "detail": detail}
 
 
 @app.get("/api/rigel/logs")
