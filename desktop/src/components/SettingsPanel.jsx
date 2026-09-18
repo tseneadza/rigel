@@ -1,10 +1,20 @@
 /**
- * SettingsPanel — modal overlay with two tabs: Orb (size/position, moved
- * here from the console) and Brain (LLM provider: stub / Claude / Ollama).
+ * SettingsPanel — modal overlay with tabs: Orb (size/position, moved here
+ * from the console), Brain (LLM provider: stub / Claude / Ollama), Voice,
+ * and Whitelist (per-action auto-approve rules for the execution layer).
  */
 import { useEffect, useState } from "react";
 import ResizeControl from "./ResizeControl.jsx";
-import { getLlmConfig, saveLlmConfig, getLlmOptions, getVoiceConfig, saveVoiceConfig } from "../api.js";
+import WhitelistSettings from "./WhitelistSettings.jsx";
+import {
+  getLlmConfig,
+  saveLlmConfig,
+  getLlmOptions,
+  getVoiceConfig,
+  saveVoiceConfig,
+  getWhitelistConfig,
+  saveWhitelistConfig,
+} from "../api.js";
 import {
   listTtsVoices,
   speak,
@@ -33,6 +43,13 @@ const DEFAULT_VOICE_CONFIG = {
   enabled: false,
 };
 
+const DEFAULT_WHITELIST_CONFIG = {
+  open_app: { all: false, targets: [] },
+  close_app: { all: false, targets: [] },
+  create_file: { all: false, targets: [] },
+  delete_file: { all: false, targets: [] },
+};
+
 const FIT_LABEL = {
   comfortable: "✅ fits comfortably",
   borderline: "⚠ may run slowly",
@@ -55,6 +72,8 @@ export default function SettingsPanel({ open, onClose, orbConfig, onOrbConfigCha
   const [sttModelReady, setSttModelReady] = useState(false);
   const [modelDownload, setModelDownload] = useState(null); // null | {stage, error?}
   const [voiceEnableError, setVoiceEnableError] = useState(null);
+  const [whitelistConfig, setWhitelistConfig] = useState(DEFAULT_WHITELIST_CONFIG);
+  const [whitelistSaveState, setWhitelistSaveState] = useState(null); // null | "saving" | "saved" | "error"
 
   function loadAll(ollamaHost) {
     setLoading(true);
@@ -96,6 +115,25 @@ export default function SettingsPanel({ open, onClose, orbConfig, onOrbConfigCha
     getWakewordStatus().then(setWakewordTrained).catch(() => setWakewordTrained(false));
     getSttModelStatus().then(setSttModelReady).catch(() => setSttModelReady(false));
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setWhitelistSaveState(null);
+    getWhitelistConfig()
+      .then(setWhitelistConfig)
+      .catch(() => setWhitelistConfig(DEFAULT_WHITELIST_CONFIG));
+  }, [open]);
+
+  async function saveWhitelist() {
+    setWhitelistSaveState("saving");
+    try {
+      await saveWhitelistConfig(whitelistConfig);
+      setWhitelistSaveState("saved");
+    } catch (err) {
+      console.error("Failed to save whitelist config:", err);
+      setWhitelistSaveState("error");
+    }
+  }
 
   useEffect(
     () =>
@@ -220,6 +258,12 @@ export default function SettingsPanel({ open, onClose, orbConfig, onOrbConfigCha
             onClick={() => setTab("voice")}
           >
             Voice
+          </button>
+          <button
+            className={`settings-tab ${tab === "whitelist" ? "active" : ""}`}
+            onClick={() => setTab("whitelist")}
+          >
+            Whitelist
           </button>
         </div>
 
@@ -503,6 +547,26 @@ export default function SettingsPanel({ open, onClose, orbConfig, onOrbConfigCha
                 </button>
                 {voiceSaveState === "saved" && <span className="settings-hint ok">Saved.</span>}
                 {voiceSaveState === "error" && (
+                  <span className="settings-hint warn">Failed to save.</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {tab === "whitelist" && (
+            <div className="whitelist-tab">
+              <WhitelistSettings config={whitelistConfig} onChange={setWhitelistConfig} />
+
+              <div className="settings-save-row">
+                <button
+                  className="settings-save-btn"
+                  onClick={saveWhitelist}
+                  disabled={whitelistSaveState === "saving"}
+                >
+                  {whitelistSaveState === "saving" ? "Saving…" : "Save"}
+                </button>
+                {whitelistSaveState === "saved" && <span className="settings-hint ok">Saved.</span>}
+                {whitelistSaveState === "error" && (
                   <span className="settings-hint warn">Failed to save.</span>
                 )}
               </div>

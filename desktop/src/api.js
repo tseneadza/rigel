@@ -43,3 +43,9 @@ export const saveVoiceConfig = (config) =>
     method: "POST",
     body: JSON.stringify(config),
   });
+export const getWhitelistConfig = () => req("/api/rigel/settings/whitelist-config");
+export const saveWhitelistConfig = (config) =>
+  req("/api/rigel/settings/whitelist-config", {
+    method: "POST",
+    body: JSON.stringify(config),
+  });

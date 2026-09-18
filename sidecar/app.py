@@ -5,7 +5,8 @@ Run standalone (dev):
 
 Endpoints (all under /api/rigel):
     POST /chat    — send a user message; logs the turn, previews + logs any
-                    command intents ('pending' or 'blocked'), returns
+                    command intents ('blocked', or run immediately as 'ok'/
+                    'error' when whitelisted, otherwise 'pending'), returns
                     Rigel's reply.
     POST /commands/{id}/approve — execute a pending command; updates its
                     status to 'ok' or 'error'.
@@ -22,6 +23,11 @@ Endpoints (all under /api/rigel):
     GET  /settings/llm-options — live-probed Claude/Ollama choices for the Settings UI.
     GET  /settings/voice-config — persisted voice/TTS preferences (or defaults).
     POST /settings/voice-config — save voice/TTS preferences.
+    GET  /settings/whitelist-config — persisted per-action auto-approve rules
+                                  (or defaults, all off).
+    POST /settings/whitelist-config — save auto-approve rules. A whitelisted
+                                  command runs immediately in /chat instead
+                                  of coming back 'pending'.
 
 Forked in spirit from AgenticOS's sidecar; intentionally self-contained
 (SQLite, no MySQL, no AgenticOS imports).
@@ -79,6 +85,18 @@ class VoiceConfig(BaseModel):
     enabled: bool = False                      # always-on wake-word listening
 
 
+class ActionWhitelist(BaseModel):
+    all: bool = False          # auto-approve every target for this action
+    targets: list[str] = []    # auto-approve only these specific targets
+
+
+class WhitelistConfig(BaseModel):
+    open_app: ActionWhitelist = ActionWhitelist()
+    close_app: ActionWhitelist = ActionWhitelist()
+    create_file: ActionWhitelist = ActionWhitelist()
+    delete_file: ActionWhitelist = ActionWhitelist()
+
+
 @app.get("/api/rigel/health")
 def health() -> dict:
     return {"ok": True, "service": "rigel-sidecar", "version": "0.1.0"}
@@ -95,15 +113,20 @@ def chat(body: ChatIn) -> dict:
     user_turn_id = db.log_turn("user", body.text)
 
     llm_config = db.get_setting("llm_config")
+    whitelist = db.get_setting("whitelist_config")
     reply, commands = brain.respond(body.text, llm_config)
 
     logged = []
     for cmd in commands:
         try:
             resolved_args = executor.preview(cmd["action"], cmd["args"])
-            status, detail = "pending", "Awaiting approval."
         except executor.UnsafeCommandError as e:
             resolved_args, status, detail = cmd["args"], "blocked", str(e)
+        else:
+            if executor.is_whitelisted(cmd["action"], resolved_args, whitelist):
+                status, detail = executor.execute(cmd["action"], resolved_args)
+            else:
+                status, detail = "pending", "Awaiting approval."
 
         cmd_id = db.log_command(
             action=cmd["action"],
@@ -120,6 +143,15 @@ def chat(body: ChatIn) -> dict:
     blocked = [c for c in logged if c["status"] == "blocked"]
     if blocked:
         reply += " " + " ".join(f"⚠ Blocked: {c['detail']}" for c in blocked)
+
+    # Same reasoning as the 'blocked' correction above: a whitelisted
+    # command already ran by the time brain.respond() wrote its "waiting on
+    # your approval" line, so append the real outcome rather than leaving
+    # that line to imply it's still pending.
+    auto_run = [c for c in logged if c["status"] in ("ok", "error")]
+    if auto_run:
+        icons = {"ok": "✅", "error": "⚠"}
+        reply += " " + " ".join(f"{icons[c['status']]} {c['detail']}" for c in auto_run)
 
     db.log_turn("rigel", reply)
 
@@ -258,6 +290,20 @@ def get_voice_config() -> dict:
 @app.post("/api/rigel/settings/voice-config")
 def save_voice_config(body: VoiceConfig) -> dict:
     db.set_setting("voice_config", body.model_dump())
+    return {"ok": True}
+
+
+@app.get("/api/rigel/settings/whitelist-config")
+def get_whitelist_config() -> dict:
+    config = db.get_setting("whitelist_config")
+    if config:
+        return config
+    return WhitelistConfig().model_dump()
+
+
+@app.post("/api/rigel/settings/whitelist-config")
+def save_whitelist_config(body: WhitelistConfig) -> dict:
+    db.set_setting("whitelist_config", body.model_dump())
     return {"ok": True}
 
 

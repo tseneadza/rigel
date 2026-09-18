@@ -15,6 +15,13 @@ Two-step contract, matched by ``app.py``:
                                  returned as ``("error", detail)`` so callers
                                  don't have to guess what might go wrong.
 
+  ``is_whitelisted(action, args, whitelist)`` — check a *previewed* action's
+                                 resolved args against the user's whitelist
+                                 (``app.py``'s ``whitelist_config`` setting).
+                                 ``app.py`` calls ``execute`` immediately
+                                 instead of waiting for approval when this
+                                 returns True.
+
 macOS only for now — other platforms raise ``NotImplementedError``, which
 ``execute`` turns into an ordinary ``"error"`` status rather than a crash.
 """
@@ -75,6 +82,22 @@ def preview(action: str, args: dict) -> dict:
         return {"path": str(resolved)}
 
     raise UnsafeCommandError(f"unknown action '{action}'.")
+
+
+def is_whitelisted(action: str, resolved_args: dict, whitelist: dict | None) -> bool:
+    """Check *previewed* (already-resolved) ``args`` against the user's
+    per-action whitelist: ``{action: {"all": bool, "targets": [str, ...]}}``.
+
+    ``"all"`` matches any target for that action; otherwise the target
+    (an app name for open/close, a resolved absolute path for file actions)
+    must exactly match one of ``"targets"``, case-insensitively.
+    """
+    entry = (whitelist or {}).get(action) or {}
+    if entry.get("all"):
+        return True
+    target = str(resolved_args.get("target") or resolved_args.get("path") or "")
+    targets = entry.get("targets") or []
+    return target.lower() in {str(t).lower() for t in targets}
 
 
 def _execute_macos(action: str, args: dict) -> tuple[str, str]:
