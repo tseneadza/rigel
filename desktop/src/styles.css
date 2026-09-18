@@ -706,6 +706,41 @@ body[data-minimized="true"] {
 }
 .ollama-model-row .settings-hint { margin: 0; margin-left: auto; }
 
+.whitelist-action {
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(var(--ice), 0.12);
+}
+.whitelist-action:last-of-type { border-bottom: none; }
+.whitelist-action .settings-row { margin: 8px 0 6px; }
+
+.whitelist-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.whitelist-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid rgba(var(--ice), 0.25);
+  border-radius: 999px;
+  background: rgba(var(--ice), 0.08);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.whitelist-chip button {
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px;
+}
+.whitelist-chip button:hover { color: rgb(var(--ice)); }
+
 .settings-save-row {
   display: flex;
   align-items: center;

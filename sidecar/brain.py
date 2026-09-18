@@ -22,12 +22,28 @@ logger = logging.getLogger(__name__)
 
 # Naive intent patterns — enough to prove the log-every-command path end to end.
 # A real parser (LLM tool-calling) replaces this wholesale later.
+# close_app recognizes "close", "quit", "terminate" and the synonyms people
+# actually say ("kill Chrome", "shut down Slack", "exit Preview").
 _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("open_app",    re.compile(r"\bopen\s+(?P<target>.+)", re.I)),
-    ("close_app",   re.compile(r"\b(?:close|quit|terminate)\s+(?P<target>.+)", re.I)),
+    ("close_app",   re.compile(r"\b(?:close|quit|terminate|exit|kill|shut down)\s+(?P<target>.+)", re.I)),
     ("create_file", re.compile(r"\bcreate\s+(?:a\s+)?(?:new\s+)?file\s+(?:named\s+)?(?P<target>.+)", re.I)),
     ("delete_file", re.compile(r"\bdelete\s+(?P<target>.+)", re.I)),
 ]
+
+# The patterns above capture everything after the verb, so natural phrasing
+# ("close the Chrome app", "quit Chrome now", "terminate Slack please") drags
+# filler words into the target and breaks the exact-name match `executor.py`
+# needs (`open -a "the Chrome app"` won't resolve). Strip it off the capture.
+_LEADING_FILLER = re.compile(r"^(?:the|a|an|my|out of)\s+", re.I)
+_TRAILING_FILLER = re.compile(r"(?:\s+(?:app|application|now|please|for me))+$", re.I)
+
+
+def _clean_target(raw: str) -> str:
+    target = raw.strip(" .!?\"'")
+    target = _TRAILING_FILLER.sub("", target)
+    target = _LEADING_FILLER.sub("", target)
+    return target.strip(" .!?\"'")
 
 
 def detect_commands(text: str) -> list[dict]:
@@ -36,7 +52,7 @@ def detect_commands(text: str) -> list[dict]:
     for action, pattern in _PATTERNS:
         m = pattern.search(text)
         if m:
-            commands.append({"action": action, "args": {"target": m.group("target").strip(" .")}})
+            commands.append({"action": action, "args": {"target": _clean_target(m.group("target"))}})
     return commands
 
 

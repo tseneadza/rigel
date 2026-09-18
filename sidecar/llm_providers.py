@@ -48,8 +48,14 @@ CLAUDE_MODELS = ["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"]
 SYSTEM_PROMPT = (
     "You are Rigel, a voice-activated desktop agent's conversational brain. "
     "Reply naturally and helpfully to the user's message. Separately, detect "
-    "any command intents in their message (e.g. opening or closing an app, "
-    "creating or deleting a file) and list them structurally. "
+    "any command intents in their message and list them structurally, using "
+    "exactly one of these four action names — never invent a different one: "
+    "'open_app' (open/launch/start an app), 'close_app' (close/quit/"
+    "terminate/exit/kill/shut down an app — all the same intent, regardless "
+    "of which verb the user used), 'create_file', 'delete_file'. "
+    "The executor that runs these matches the 'target' argument (an app "
+    "name, or a file path) exactly, so give just the name/path itself — no "
+    "articles ('the', 'a'), no trailing filler ('now', 'please', 'app'). "
     "You never execute anything yourself — you only detect and report intent; "
     "execution happens separately, behind the user's explicit approval. If "
     "you detect commands, your reply should say you understood and that "
@@ -74,7 +80,10 @@ RESPONSE_SCHEMA = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "action": {"type": "string"},
+                    "action": {
+                        "type": "string",
+                        "enum": ["open_app", "close_app", "create_file", "delete_file"],
+                    },
                     "args_json": {
                         "type": "string",
                         "description": "JSON-encoded object of this action's arguments, e.g. '{\"target\": \"Chrome\"}'.",
@@ -175,7 +184,8 @@ def _ollama_request(host: str, path: str, body: dict | None, timeout: float) -> 
 def ollama_respond(text: str, model: str, host: str = DEFAULT_OLLAMA_HOST) -> tuple[str, list[dict]]:
     schema_hint = (
         "Respond with ONLY a JSON object of the exact shape "
-        '{"reply": "<string>", "commands": [{"action": "<string>", '
+        '{"reply": "<string>", "commands": [{"action": '
+        "<one of 'open_app'|'close_app'|'create_file'|'delete_file', exactly, never another string>, "
         '"args_json": "<JSON-encoded string of an object, e.g. \'{\\"target\\": \\"Chrome\\"}\'>"}]} '
         "— no prose outside the JSON. args_json must be a STRING containing encoded JSON, not a nested object."
     )
