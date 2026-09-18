@@ -345,6 +345,43 @@ body {
 }
 .composer button:disabled { opacity: 0.4; cursor: default; }
 
+.command-approvals {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.command-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(var(--ice), 0.3);
+  border-radius: 12px;
+  background: rgba(10, 20, 38, 0.6);
+}
+.command-text {
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--mono);
+}
+.command-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+.command-actions button {
+  border: none;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #04070f;
+  background: rgb(var(--ice));
+}
+.command-actions .command-deny {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.1);
+}
+
 /* ── orb scalability positioning ────────────────────────────────────────── */
 
 .rigel-orb[data-position="top-left"] {

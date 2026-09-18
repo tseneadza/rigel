@@ -15,6 +15,10 @@ export const getState = () => req("/api/rigel/state");
 export const getLogs = (limit = 50) => req(`/api/rigel/logs?limit=${limit}`);
 export const sendChat = (text) =>
   req("/api/rigel/chat", { method: "POST", body: JSON.stringify({ text }) });
+export const approveCommand = (id) =>
+  req(`/api/rigel/commands/${id}/approve`, { method: "POST" });
+export const rejectCommand = (id) =>
+  req(`/api/rigel/commands/${id}/reject`, { method: "POST" });
 export const getOrbConfig = () => req("/api/rigel/settings/orb-config");
 export const saveOrbConfig = (config) =>
   req("/api/rigel/settings/orb-config", {

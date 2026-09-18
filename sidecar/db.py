@@ -67,7 +67,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
             turn_id   INTEGER,                  -- the user turn that triggered it
             action    TEXT    NOT NULL,         -- e.g. 'open_app', 'create_file'
             args      TEXT    NOT NULL,         -- JSON blob
-            status    TEXT    NOT NULL,         -- 'deferred' | 'ok' | 'blocked' | 'error'
+            status    TEXT    NOT NULL,         -- 'pending' | 'ok' | 'blocked' | 'rejected' | 'error'
             detail    TEXT,                     -- human-readable note
             FOREIGN KEY (turn_id) REFERENCES turns (id)
         );
@@ -119,6 +119,29 @@ def recent_turns(limit: int = 50) -> list[dict]:
         "SELECT id, ts, role, text FROM turns ORDER BY id DESC LIMIT ?", (limit,)
     ).fetchall()
     return [dict(r) for r in reversed(rows)]
+
+
+def get_command(command_id: int) -> dict | None:
+    conn = connect()
+    row = conn.execute(
+        "SELECT id, ts, turn_id, action, args, status, detail "
+        "FROM command_attempts WHERE id = ?", (command_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    d = dict(row)
+    d["args"] = json.loads(d["args"]) if d["args"] else {}
+    return d
+
+
+def update_command_status(command_id: int, status: str, detail: str = "") -> None:
+    conn = connect()
+    with _LOCK:
+        conn.execute(
+            "UPDATE command_attempts SET status = ?, detail = ? WHERE id = ?",
+            (status, detail, command_id),
+        )
+        conn.commit()
 
 
 def recent_commands(limit: int = 50) -> list[dict]:
