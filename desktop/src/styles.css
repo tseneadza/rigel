@@ -130,8 +130,8 @@ body[data-minimized="true"] {
   cursor: grabbing;
   transition: none;
 }
-.rigel-orb[data-state="thinking"] { --orb: 90, 170, 255; }
-.rigel-orb[data-state="speaking"] { --orb: 150, 225, 255; }
+.rigel-orb[data-state="thinking"] { --orb: 255, 215, 60; }
+.rigel-orb[data-state="speaking"] { --orb: 110, 230, 140; }
 .rigel-orb[data-state="recording"] { --orb: 255, 120, 90; }
 
 .orb-stage {
