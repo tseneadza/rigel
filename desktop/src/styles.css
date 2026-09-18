@@ -447,7 +447,7 @@ body[data-minimized="true"] {
 }
 
 .resize-row label {
-  flex: 0 0 60px;
+  flex: 0 0 120px;
   font-weight: 600;
   font-family: var(--mono);
 }

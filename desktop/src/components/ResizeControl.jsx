@@ -1,15 +1,30 @@
 import { useState } from "react";
 
-export default function ResizeControl({ orbConfig, onConfigChange }) {
-  const [localDiameter, setLocalDiameter] = useState(orbConfig.diameter_px);
+const DEFAULT_MIN_DIAMETER_PX = 90;
+const DEFAULT_MAX_DIAMETER_PX = 620;
 
-  function handleDiameterChange(e) {
-    const newDiameter = parseInt(e.target.value, 10);
-    setLocalDiameter(newDiameter);
+export default function ResizeControl({ orbConfig, onConfigChange }) {
+  const [localMinDiameter, setLocalMinDiameter] = useState(
+    orbConfig.min_diameter_px ?? DEFAULT_MIN_DIAMETER_PX
+  );
+  const [localMaxDiameter, setLocalMaxDiameter] = useState(
+    orbConfig.diameter_px ?? DEFAULT_MAX_DIAMETER_PX
+  );
+
+  function handleMinDiameterChange(e) {
+    setLocalMinDiameter(parseInt(e.target.value, 10));
   }
 
-  function handleDiameterRelease() {
-    onConfigChange({ ...orbConfig, diameter_px: localDiameter });
+  function handleMinDiameterRelease() {
+    onConfigChange({ ...orbConfig, min_diameter_px: localMinDiameter });
+  }
+
+  function handleMaxDiameterChange(e) {
+    setLocalMaxDiameter(parseInt(e.target.value, 10));
+  }
+
+  function handleMaxDiameterRelease() {
+    onConfigChange({ ...orbConfig, diameter_px: localMaxDiameter });
   }
 
   function handleCornerClick(corner) {
@@ -18,13 +33,15 @@ export default function ResizeControl({ orbConfig, onConfigChange }) {
 
   function handleReset() {
     const defaultConfig = {
-      diameter_px: 620,
+      diameter_px: DEFAULT_MAX_DIAMETER_PX,
+      min_diameter_px: DEFAULT_MIN_DIAMETER_PX,
       position_corner: "center",
       is_minimized: false,
       x_pct: null,
       y_pct: null,
     };
-    setLocalDiameter(620);
+    setLocalMinDiameter(DEFAULT_MIN_DIAMETER_PX);
+    setLocalMaxDiameter(DEFAULT_MAX_DIAMETER_PX);
     onConfigChange(defaultConfig);
   }
 
@@ -38,26 +55,42 @@ export default function ResizeControl({ orbConfig, onConfigChange }) {
   return (
     <div className="resize-control">
       <div className="resize-row">
-        <label>Size:</label>
+        <label>Minimized size:</label>
         <input
           type="range"
-          min="60"
-          max="620"
+          min="40"
+          max="200"
           step="10"
-          value={localDiameter}
-          onChange={handleDiameterChange}
-          onMouseUp={handleDiameterRelease}
-          onTouchEnd={handleDiameterRelease}
+          value={localMinDiameter}
+          onChange={handleMinDiameterChange}
+          onMouseUp={handleMinDiameterRelease}
+          onTouchEnd={handleMinDiameterRelease}
           className="size-slider"
         />
-        <span className="size-label">{localDiameter}px</span>
+        <span className="size-label">{localMinDiameter}px</span>
+      </div>
+
+      <div className="resize-row">
+        <label>Expanded size:</label>
+        <input
+          type="range"
+          min="200"
+          max="620"
+          step="10"
+          value={localMaxDiameter}
+          onChange={handleMaxDiameterChange}
+          onMouseUp={handleMaxDiameterRelease}
+          onTouchEnd={handleMaxDiameterRelease}
+          className="size-slider"
+        />
+        <span className="size-label">{localMaxDiameter}px</span>
         <button onClick={handleReset} className="reset-btn">
           Reset
         </button>
       </div>
 
       <div className="resize-row">
-        <label>Position:</label>
+        <label>Minimized position:</label>
         <div className="corner-picker">
           {["top-left", "top-right", "bottom-left", "bottom-right"].map(
             (corner) => (

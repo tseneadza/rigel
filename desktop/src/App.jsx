@@ -3,7 +3,13 @@ import RigelOrb from "./components/RigelOrb.jsx";
 import ChatConsole from "./components/ChatConsole.jsx";
 import SettingsPanel from "./components/SettingsPanel.jsx";
 import { getLogs, getOrbConfig, saveOrbConfig, getVoiceConfig, sendChat } from "./api.js";
-import { restoreRestingBounds, shrinkToCorner } from "./nativeWindow.js";
+import {
+  restoreRestingBounds,
+  shrinkToCorner,
+  beginWindowDrag,
+  dragWindowTo,
+  endWindowDrag,
+} from "./nativeWindow.js";
 import { installToggleHotkey } from "./hotkey.js";
 import {
   onVoiceState,
@@ -15,8 +21,10 @@ import {
   looksLikeSpeech,
 } from "./voice.js";
 
-const WORKING_DIAMETER_PX = 90;
-const WORKING_WINDOW_PX = WORKING_DIAMETER_PX + 40;
+// Fallback only — used before orbConfig has loaded from the sidecar; the
+// real minimized size comes from orbConfig.min_diameter_px (Settings → Orb).
+const DEFAULT_MIN_DIAMETER_PX = 90;
+const MINIMIZED_WINDOW_MARGIN_PX = 40;
 // Rigel must be continuously busy for this long before the window shrinks.
 // A voice round trip (transcribe → reply → start speaking) takes well under
 // a second, and shrinking/restoring the OS window for that reads as the
@@ -32,6 +40,7 @@ export default function App() {
   const [manualMinimize, setManualMinimize] = useState(false);
   const [orbConfig, setOrbConfig] = useState({
     diameter_px: 620,
+    min_diameter_px: DEFAULT_MIN_DIAMETER_PX,
     position_corner: "center",
     is_minimized: false,
   });
@@ -158,6 +167,23 @@ export default function App() {
     });
   }
 
+  // Dragging only happens while minimized (see RigelOrb) — it moves the real
+  // OS window live, the same way dragging a titlebar would, rather than a
+  // CSS position inside a window that never moves. On release, the final
+  // spot is persisted the normal way so it's restored on the next minimize.
+  function handleMinimizedDrag(phase, screenX, screenY) {
+    if (phase === "start") {
+      beginWindowDrag(screenX, screenY);
+    } else if (phase === "move") {
+      dragWindowTo(screenX, screenY);
+    } else if (phase === "end") {
+      dragWindowTo(screenX, screenY);
+      endWindowDrag().then((pos) => {
+        if (pos) handleOrbDrag(pos.xPct, pos.yPct);
+      });
+    }
+  }
+
   const caption =
     online === false
       ? "Offline — start the sidecar."
@@ -187,22 +213,39 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [isWorking]);
   const minimized = autoMinimized || manualMinimize;
-  const displayDiameter = minimized ? WORKING_DIAMETER_PX : orbConfig.diameter_px;
+  // Settings → Orb's size slider now covers the expanded/resting ("maximum")
+  // size; its minimized ("minimum") size is separate, defaulting to the
+  // constant this used to be hardcoded to. The position picker (and dragging)
+  // governs only where the orb parks while minimized, so it's forced to
+  // "center" at rest — that's a CSS position within the (large) resting
+  // window, unrelated to the minimized window's real screen placement below.
+  const minDiameterPx = orbConfig.min_diameter_px ?? DEFAULT_MIN_DIAMETER_PX;
+  const minimizedWindowPx = minDiameterPx + MINIMIZED_WINDOW_MARGIN_PX;
+  const displayDiameter = minimized ? minDiameterPx : orbConfig.diameter_px;
   const displayCorner = minimized ? "center" : orbConfig.position_corner;
   const displayXPct = minimized ? null : orbConfig.x_pct;
   const displayYPct = minimized ? null : orbConfig.y_pct;
 
   // Shrink the real OS window (not just the CSS orb) down to a small
   // borderless square while minimized, and restore it once expanded again.
+  // The square itself is placed at orbConfig's chosen corner/custom position
+  // so the minimized orb actually lands where Settings → Orb says it should.
   useEffect(() => {
     // Drives `body[data-minimized]` — the CSS drops the opaque starfield so
     // the (transparent-capable) window shows only the orb while shrunk.
     document.body.dataset.minimized = minimized ? "true" : "false";
     if (minimized) {
-      shrinkToCorner({ widthPx: WORKING_WINDOW_PX, heightPx: WORKING_WINDOW_PX });
+      shrinkToCorner({
+        widthPx: minimizedWindowPx,
+        heightPx: minimizedWindowPx,
+        corner: orbConfig.position_corner,
+        xPct: orbConfig.x_pct,
+        yPct: orbConfig.y_pct,
+      });
     } else {
       restoreRestingBounds();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [minimized]);
 
   return (
@@ -232,6 +275,7 @@ export default function App() {
           positionYPct={displayYPct}
           isMinimized={minimized || orbConfig.is_minimized}
           onDrag={handleOrbDrag}
+          onMinimizedDrag={handleMinimizedDrag}
         />
       </main>
 

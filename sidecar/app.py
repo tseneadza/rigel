@@ -14,8 +14,9 @@ Endpoints (all under /api/rigel):
     GET  /state   — current orb state ('idle' | 'thinking' | 'speaking').
     GET  /logs    — recent conversation turns + command attempts.
     GET  /health  — liveness.
-    GET  /settings/orb-config  — persisted orb size/position (or defaults).
-    POST /settings/orb-config  — save orb size/position.
+    GET  /settings/orb-config  — persisted orb sizes (expanded/minimized) and
+                                  minimized-orb position (or defaults).
+    POST /settings/orb-config  — save orb sizes/position.
     GET  /settings/llm-config  — persisted LLM brain provider/model (or defaults).
     POST /settings/llm-config  — save LLM brain provider/model.
     GET  /settings/llm-options — live-probed Claude/Ollama choices for the Settings UI.
@@ -57,8 +58,9 @@ class ChatIn(BaseModel):
 
 
 class OrbConfig(BaseModel):
-    diameter_px: int
-    position_corner: str
+    diameter_px: int                           # expanded/resting ("maximum") size
+    min_diameter_px: int = 90                  # minimized size
+    position_corner: str                       # where the orb parks when minimized
     is_minimized: bool = False
     x_pct: float | None = None
     y_pct: float | None = None
@@ -159,8 +161,10 @@ def logs(limit: int = 50) -> dict:
 
 def _validate_orb_config(config: OrbConfig) -> tuple[bool, str]:
     """Validate orb config values."""
-    if not (60 <= config.diameter_px <= 620):
-        return False, "diameter_px must be 60–620"
+    if not (200 <= config.diameter_px <= 620):
+        return False, "diameter_px (expanded size) must be 200–620"
+    if not (40 <= config.min_diameter_px <= 200):
+        return False, "min_diameter_px (minimized size) must be 40–200"
     valid_corners = ("center", "top-left", "top-right", "bottom-left", "bottom-right", "custom")
     if config.position_corner not in valid_corners:
         return False, f"position_corner must be one of {valid_corners}"
@@ -172,16 +176,22 @@ def _validate_orb_config(config: OrbConfig) -> tuple[bool, str]:
     return True, ""
 
 
+_ORB_CONFIG_DEFAULTS = {
+    "diameter_px": 620,
+    "min_diameter_px": 90,
+    "position_corner": "center",
+    "is_minimized": False,
+}
+
+
 @app.get("/api/rigel/settings/orb-config")
 def get_orb_config() -> dict:
     config = db.get_setting("orb_config")
     if config:
-        return config
-    return {
-        "diameter_px": 620,
-        "position_corner": "center",
-        "is_minimized": False,
-    }
+        # Backfill keys added after a config was first saved (e.g. an older
+        # config predating min_diameter_px) so old settings don't break.
+        return {**_ORB_CONFIG_DEFAULTS, **config}
+    return dict(_ORB_CONFIG_DEFAULTS)
 
 
 @app.post("/api/rigel/settings/orb-config")
