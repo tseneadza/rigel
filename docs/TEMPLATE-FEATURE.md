@@ -4,6 +4,7 @@
 What this feature does and why it's important to Rigel's core functionality.
 
 ## Status
+- [ ] Incubating
 - [ ] Planned
 - [ ] In Development
 - [ ] Alpha/Beta
