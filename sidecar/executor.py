@@ -22,6 +22,15 @@ Two-step contract, matched by ``app.py``:
                                  instead of waiting for approval when this
                                  returns True.
 
+Five actions share that contract: the original four (``open_app``,
+``close_app``, ``create_file``, ``delete_file``), plus ``app_action`` —
+a per-app command produced by one of the handlers in ``sidecar/handlers/``
+(``{"app_id": ..., "tool": ..., "tool_args": {...}}``). Where the first four
+run through ``_execute_macos`` directly, ``app_action`` is dispatched to
+that handler's own ``execute_tool``; this module still owns validating the
+tool name against the handler's declared ``tools`` (in ``preview``) and the
+whitelist/execute plumbing around it, same as any other action.
+
 macOS only for now — other platforms raise ``NotImplementedError``, which
 ``execute`` turns into an ordinary ``"error"`` status rather than a crash.
 """
@@ -30,6 +39,8 @@ from __future__ import annotations
 import subprocess
 import sys
 from pathlib import Path
+
+from sidecar.handlers import registry
 
 # Sandbox root for relative create/delete targets, and the only tree an
 # absolute target is allowed to resolve inside.
@@ -81,6 +92,19 @@ def preview(action: str, args: dict) -> dict:
                 raise UnsafeCommandError(f"'{resolved}' is a directory — refused.")
         return {"path": str(resolved)}
 
+    if action == "app_action":
+        app_id = str(args.get("app_id", "")).strip()
+        tool = str(args.get("tool", "")).strip()
+        if not app_id or not tool:
+            raise UnsafeCommandError("app_action missing app_id/tool.")
+        handler = registry.get(app_id)
+        if handler is None:
+            raise UnsafeCommandError(f"no handler registered for app '{app_id}'.")
+        if tool not in {t["name"] for t in handler.tools}:
+            raise UnsafeCommandError(f"'{tool}' is not a recognized action for {handler.display_name}.")
+        tool_args = args.get("tool_args")
+        return {"app_id": app_id, "tool": tool, "tool_args": tool_args if isinstance(tool_args, dict) else {}}
+
     raise UnsafeCommandError(f"unknown action '{action}'.")
 
 
@@ -91,7 +115,21 @@ def is_whitelisted(action: str, resolved_args: dict, whitelist: dict | None) -> 
     ``"all"`` matches any target for that action; otherwise the target
     (an app name for open/close, a resolved absolute path for file actions)
     must exactly match one of ``"targets"``, case-insensitively.
+
+    ``app_action`` is keyed differently — per app, not per global action —
+    since "auto-approve Chrome's new-tab" shouldn't also auto-approve VS
+    Code opening arbitrary folders. Its shape is
+    ``whitelist["app_action"] = {app_id: {"all": bool, "tools": [str, ...]}}``.
     """
+    if action == "app_action":
+        app_id = str(resolved_args.get("app_id") or "")
+        tool = str(resolved_args.get("tool") or "")
+        entry = ((whitelist or {}).get("app_action") or {}).get(app_id) or {}
+        if entry.get("all"):
+            return True
+        tools = entry.get("tools") or []
+        return tool in set(tools)
+
     entry = (whitelist or {}).get(action) or {}
     if entry.get("all"):
         return True
@@ -132,6 +170,12 @@ def _execute_macos(action: str, args: dict) -> tuple[str, str]:
         except OSError as e:
             return ("error", str(e))
         return ("ok", f"Deleted {path}.")
+
+    if action == "app_action":
+        handler = registry.get(args["app_id"])
+        if handler is None:
+            return ("error", f"no handler registered for app '{args['app_id']}'.")
+        return handler.execute_tool(args["tool"], args.get("tool_args") or {})
 
     return ("error", f"unknown action '{action}'.")
 

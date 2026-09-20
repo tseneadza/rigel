@@ -14,6 +14,8 @@ Endpoints (all under /api/rigel):
                     executes it.
     GET  /state   — current orb state ('idle' | 'thinking' | 'speaking').
     GET  /logs    — recent conversation turns + command attempts.
+    GET  /handlers — registered app handlers (sidecar/handlers/) and the
+                    tools each exposes, for the whitelist UI.
     GET  /health  — liveness.
     GET  /settings/orb-config  — persisted orb sizes (expanded/minimized) and
                                   minimized-orb position (or defaults).
@@ -41,6 +43,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from sidecar import brain, db, executor, llm_providers
+from sidecar.handlers import registry
 
 RIGEL_PORT = int(os.getenv("RIGEL_PORT", "5140"))
 
@@ -90,11 +93,17 @@ class ActionWhitelist(BaseModel):
     targets: list[str] = []    # auto-approve only these specific targets
 
 
+class AppActionWhitelist(BaseModel):
+    all: bool = False          # auto-approve every tool this app handler exposes
+    tools: list[str] = []      # auto-approve only these specific tool names
+
+
 class WhitelistConfig(BaseModel):
     open_app: ActionWhitelist = ActionWhitelist()
     close_app: ActionWhitelist = ActionWhitelist()
     create_file: ActionWhitelist = ActionWhitelist()
     delete_file: ActionWhitelist = ActionWhitelist()
+    app_action: dict[str, AppActionWhitelist] = {}   # keyed by app_id
 
 
 @app.get("/api/rigel/health")
@@ -291,6 +300,23 @@ def get_voice_config() -> dict:
 def save_voice_config(body: VoiceConfig) -> dict:
     db.set_setting("voice_config", body.model_dump())
     return {"ok": True}
+
+
+@app.get("/api/rigel/handlers")
+def list_handlers() -> dict:
+    """Registered app handlers and the tools each exposes, for the
+    Settings UI's per-app whitelist section — it has no other way to know
+    what handlers ``sidecar/handlers/`` currently registers."""
+    return {
+        "handlers": [
+            {
+                "app_id": h.app_id,
+                "display_name": h.display_name,
+                "tools": [{"name": t["name"], "description": t.get("description", "")} for t in h.tools],
+            }
+            for h in registry.all_handlers()
+        ]
+    }
 
 
 @app.get("/api/rigel/settings/whitelist-config")

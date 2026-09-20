@@ -10,6 +10,14 @@ When ``llm_config`` selects a real provider (Claude or Ollama, see
 commands. If the provider call fails for any reason (no API key, model
 unreachable, bad JSON back), this module falls back to the original regex
 stub rather than leaving the user without a reply.
+
+On top of that shared four-verb pass (open/close app, create/delete file),
+``respond()`` separately checks whether ``text`` matches a registered
+``AppHandler`` (see ``sidecar/handlers/``) — an app's own richer vocabulary
+("new tab in Chrome") that the shared schema can't express. A match adds
+one or more ``app_action`` commands via that handler's own scoped Claude
+call (``_app_commands``); it never replaces or blocks the shared pass's
+reply and commands, only adds to them.
 """
 from __future__ import annotations
 
@@ -17,6 +25,7 @@ import logging
 import re
 
 from sidecar import llm_providers
+from sidecar.handlers import registry
 
 logger = logging.getLogger(__name__)
 
@@ -92,9 +101,11 @@ def respond(text: str, llm_config: dict | None = None) -> tuple[str, list[dict]]
 
     if provider == "claude":
         try:
-            return llm_providers.claude_respond(text, llm_config["claude_model"])
+            reply, commands = llm_providers.claude_respond(text, llm_config["claude_model"])
         except llm_providers.LLMError as e:
             logger.warning("Claude brain failed (%s); falling back to stub.", e)
+        else:
+            return reply, commands + _app_commands(text, llm_config)
     elif provider == "ollama":
         try:
             return llm_providers.ollama_respond(
@@ -106,3 +117,23 @@ def respond(text: str, llm_config: dict | None = None) -> tuple[str, list[dict]]
             logger.warning("Ollama brain failed (%s); falling back to stub.", e)
 
     return _stub_respond(text)
+
+
+def _app_commands(text: str, llm_config: dict) -> list[dict]:
+    """Route ``text`` to a matching per-app handler's own scoped Claude
+    call, if one matches. Handler support is Claude-only for now — Ollama's
+    JSON-mode prompting (see ``ollama_respond``) doesn't have an equivalent
+    to real tool-use, so extending this to Ollama needs its own design
+    rather than reusing ``claude_app_action`` as-is. Failure here (no match,
+    or the scoped call itself failing) never blocks the reply already
+    produced by the shared four-verb pass — it only ever adds commands, and
+    an empty list is a perfectly normal outcome, not a fallback condition.
+    """
+    handler = registry.match(text)
+    if handler is None:
+        return []
+    try:
+        return llm_providers.claude_app_action(text, llm_config["claude_model"], handler)
+    except llm_providers.LLMError as e:
+        logger.warning("App handler '%s' call failed (%s); skipping.", handler.app_id, e)
+        return []

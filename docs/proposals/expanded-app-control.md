@@ -1,121 +1,188 @@
 # Feature: Expanded App-Operation Control
 
 ## Overview
-Rigel currently detects open/close app intents and executes them through an
+Rigel detects open/close app intents and executes them through an
 approval-gated execution layer, with a per-action/target whitelist to skip
 approval for trusted commands (`sidecar/executor.py`,
 `desktop/src/components/CommandApproval.jsx`,
-`desktop/src/components/WhitelistSettings.jsx`). This proposal is about
-going further: giving the user finer-grained control over *how* Rigel
-operates the apps it opens — not just launching/quitting them, but things
-like focusing/switching windows, minimizing/resizing, listing what's
-currently running, and app-specific actions — using the same
-intent-parse → approval-gate → execute pattern already in place.
+`desktop/src/components/WhitelistSettings.jsx`). This feature goes further:
+giving the user control over *how* Rigel operates the apps it opens — not
+just launching/quitting them, but app-specific actions like opening a new
+Chrome tab or a specific folder in VS Code — through a per-app "handler"
+pattern (`sidecar/handlers/`), each handler acting as its own small,
+LLM-backed sub-agent for one app.
 
-This doc also records a verification done alongside the proposal: at the
-time of writing, `main` (`feda36d`) already contains the approval-gated
-execution layer, the whitelist feature, and the close/quit/kill intent fix
-from the prior session — confirmed merged and pushed, nothing outstanding.
+This doc originally recorded a verification done alongside the initial
+proposal: at the time of writing, `main` (`feda36d`) already contained the
+approval-gated execution layer, the whitelist feature, and the close/quit/
+kill intent fix from a prior session — confirmed merged and pushed, nothing
+outstanding.
 
 ## Status
-- [x] Incubating
+- [ ] Incubating
 - [ ] Planned
-- [ ] In Development
+- [x] In Development
 - [ ] Alpha/Beta
 - [ ] Production
 
 ## User-Facing Description
-Today, a user can ask Rigel to open or close an app, and (depending on
-whitelist config) either approve the action once or have it run
-automatically. This proposal extends that to richer operations, e.g.:
+A user can already ask Rigel to open or close an app, approved once or
+auto-run per the whitelist. This feature adds a second layer on top: once an
+app is open, its own handler can carry out app-specific requests, e.g.:
 
-> **User:** "Rigel, switch to Chrome." / "Minimize VS Code." / "What's
-> running right now?"
+> **User:** "Rigel, open a new Chrome tab to github.com." / "Open
+> ~/projects/rigel in VS Code."
 
-All still routed through the same approval gate and whitelist users already
-configure in Settings.
+Still routed through the same approval gate and whitelist users already
+configure in Settings — an app handler's actions are a new whitelist
+category (per app, not per generic action), not a bypass of the gate.
 
 ## Technical Implementation
 
-### Architecture
-Builds on the existing pipeline, no new components required — only new
-intent types and matching OS-hook handlers:
+### Architecture — the "AppHandler" sub-agent pattern
+Each app Rigel can operate on gets its own `AppHandler`: a system prompt
+giving an LLM that app's persona, plus a Claude tool-use `tools` schema
+listing exactly the actions that app supports. `brain.py`'s existing
+four-verb pass (open/close app, create/delete file) is unchanged; on top of
+it, `brain.py` separately checks whether the user's text matches a
+registered handler (`sidecar/handlers/registry.py`) and, if so, makes that
+handler's own scoped Claude tool-use call. A resulting tool call becomes a
+single new command type, `app_action`, which flows through the *same*
+preview → whitelist-check → approve/auto-run → execute → log pipeline as
+every other command — `executor.py` just gained one more action to
+recognize, not a parallel pipeline.
 
 ```
-User prompt → brain.py (intent parsing)
-            → executor.py (approval gate + whitelist check)
-            → OS-hook handler (new: focus/minimize/resize/list, in addition
-              to existing open/close/file-CRUD)
-            → db.py command_attempts log
+User prompt → brain.py
+                ├─ shared four-verb pass (open/close app, create/delete file)
+                └─ registry.match(text) → matched handler's own scoped
+                   Claude tool-use call → zero or one `app_action` command
+                                │
+                                ▼
+             executor.py: preview (validates app_id/tool against the
+             handler's declared tools) → whitelist check (per app_id, not
+             per generic action) → execute (dispatches to the handler's own
+             execute_tool, e.g. AppleScript or a CLI) → db.py command log
 ```
+
+This mirrors, deliberately, how Claude Code itself delegates work to
+subagents for a scoped task rather than doing everything in one shared
+context — each `AppHandler` is Rigel's analogue: a small, self-contained
+sub-agent for one app's vocabulary, dispatched by a router (`brain.py`)
+and reporting back through the same approval/logging path everything else
+uses.
 
 ### Key Components
-- **Frontend:** `CommandApproval.jsx` (approval prompt — would need new
-  copy for non open/close actions), `WhitelistSettings.jsx` (whitelist UI —
-  would need new action types)
-- **Backend:** `sidecar/brain.py` (intent parsing — needs new intent
-  categories), `sidecar/executor.py` (execution + approval gate — needs new
-  handlers per platform)
-- **Storage:** existing `command_attempts` table in `~/.rigel/rigel.db`
-  (no schema change needed if action/target stay generic strings)
-- **APIs:** existing `/api/rigel/*` routes in `sidecar/app.py`
+- **Framework:** `sidecar/handlers/base.py` (the `AppHandler` interface),
+  `sidecar/handlers/registry.py` (registration + keyword matching),
+  `sidecar/handlers/window_ops.py` (shared AppleScript focus/minimize
+  helpers)
+- **Router:** `sidecar/brain.py` — `_app_commands()` matches text to a
+  handler and calls its scoped LLM request
+- **LLM call:** `sidecar/llm_providers.py` — `claude_app_action()`, using
+  real Claude tool-use (`tools=handler.tools`) rather than the shared
+  four-verb JSON-schema trick, since each handler's tool list varies
+- **Execution:** `sidecar/executor.py` — `app_action` branch in
+  `preview`/`is_whitelisted`/`execute`, dispatching to
+  `handler.execute_tool()`
+- **API:** `sidecar/app.py` — `GET /api/rigel/handlers` (lists registered
+  handlers + tools for the Settings UI), `WhitelistConfig.app_action`
+  (per-app-id whitelist entries)
+- **Frontend:** `CommandApproval.jsx` (readable `app_action` card text),
+  `WhitelistSettings.jsx` (per-app whitelist section, fed by `/handlers`)
+- **Concrete handlers:** `sidecar/handlers/chrome.py` (new_tab, close_tab,
+  list_tabs, new_window, focus, minimize), `sidecar/handlers/vscode.py`
+  (open_file, open_folder, new_window, focus, minimize) — the first two
+  proofs of the pattern, built in parallel against the frozen interface
+  above
 
 ### Data Flow
-1. User asks for a non open/close operation (e.g. "minimize Chrome")
-2. `brain.py` classifies the intent (new category alongside open/close/file-CRUD)
-3. `executor.py` checks the whitelist; if not whitelisted, surfaces an approval prompt
-4. On approval, a platform-specific OS-hook handler performs the operation
-5. Result is logged to `command_attempts`, same as today
+1. User asks for an app-specific action (e.g. "new tab in Chrome to github.com")
+2. `brain.py`'s shared pass finds no open/close/file command; separately,
+   `registry.match()` finds the Chrome handler
+3. `llm_providers.claude_app_action()` asks Chrome's own scoped Claude call,
+   which returns a `new_tab` tool call with `{"url": "github.com"}`
+4. `executor.preview()` validates `new_tab` is one of Chrome's declared tools
+5. `executor.is_whitelisted()` checks `whitelist["app_action"]["chrome"]`
+6. If not whitelisted, an approval card renders ("chrome: new tab
+   (github.com)"); on approval, `executor.execute()` dispatches to
+   `ChromeHandler.execute_tool("new_tab", {"url": "github.com"})`
+7. Result is logged to `command_attempts`, same as any other command
 
 ## Configuration
-No new environment variables anticipated; whitelist entries would gain new
-action types (e.g. `focus`, `minimize`, `resize`) alongside the existing
-`open`/`close`.
+No new environment variables. `whitelist_config` gained one key:
+`app_action: {app_id: {"all": bool, "tools": [str, ...]}}`, independent of
+the four existing action keys.
 
 ## Usage Examples
 
 ### User Perspective
 ```
-User prompt: "Rigel, minimize Chrome."
-Rigel response: "Understood. I would minimize Chrome — but this action type
-isn't wired up yet, so I've logged the intent instead."
+User prompt: "Rigel, open a new Chrome tab to github.com."
+Rigel response: "Understood. I've logged that and I'm waiting on your
+approval to chrome: new tab (github.com) — check the console."
 ```
 
 ### Developer Perspective
 ```python
-# sidecar/executor.py — sketch of a new handler alongside existing
-# open/close/file-CRUD handlers
-def handle_window_action(action: str, target: str) -> ExecutionResult:
-    ...
+# sidecar/handlers/chrome.py — the pattern every handler follows
+class ChromeHandler(AppHandler):
+    app_id = "chrome"
+    display_name = "Google Chrome"
+    match_keywords = ["chrome", "google chrome"]
+    system_prompt = "..."
+    tools = [{"name": "new_tab", "description": "...", "input_schema": {...}}, ...]
+
+    def execute_tool(self, tool_name, tool_input):
+        ...  # AppleScript via subprocess, same (status, detail) contract as executor.py
+
+registry.register(ChromeHandler())
 ```
 
 ## Testing
 - **Manual Testing Checklist:**
-  - [ ] New intent types are correctly classified by `brain.py`
-  - [ ] Approval gate fires for non-whitelisted window actions
-  - [ ] Whitelisted window actions skip approval
-  - [ ] Command attempt is logged regardless of approval outcome
+  - [ ] `registry.match()` routes "chrome"/"vs code" text to the right handler
+  - [ ] A handler's scoped Claude call returns zero commands for text that
+        isn't actually an in-app action (e.g. "open Chrome" — should stay
+        the generic `open_app`, not an `app_action`)
+  - [ ] `executor.preview()` rejects a tool name not in the handler's `tools`
+  - [ ] Per-app whitelist (`app_action.<app_id>`) auto-runs only that app's
+        actions, not another app's
+  - [ ] `GET /api/rigel/handlers` lists both handlers with their tools
+  - [ ] `WhitelistSettings.jsx` renders a working per-app section
+  - [ ] `CommandApproval.jsx` shows a readable card for an `app_action`
+  - [ ] Chrome handler: new_tab/close_tab/list_tabs/new_window/focus/minimize
+        each work against a real running Chrome
+  - [ ] VS Code handler: open_file/open_folder/new_window/focus/minimize
+        each work against a real running VS Code, and `code` CLI missing is
+        handled with a clear error rather than a traceback
 
 ## Known Limitations
-- Real execution for open/close/file-CRUD is itself still early (per
-  README's "Project Status" section); window-level control (focus,
-  minimize, resize, enumerate running apps) is not implemented at all yet.
-- Platform differences (macOS/Windows/Linux) mean OS-hook handlers likely
-  need per-platform implementations, same as the voice pipeline already does.
+- macOS only, same as the rest of the execution layer.
+- Handler support is Claude-only for now — `claude_app_action()` uses real
+  tool-use, which the Ollama path's JSON-mode prompting doesn't have an
+  equivalent for yet.
+- Two handlers exist so far (Chrome, VS Code); everything else still only
+  gets the generic open/close/file-CRUD treatment.
+- `registry.match()` is a simple keyword substring match, not the LLM
+  itself — an utterance that doesn't mention a known app's keyword never
+  reaches that app's handler, even if it's conversationally clear which app
+  is meant.
 
 ## Future Enhancements
-- Focus/switch to a running app's window
-- Minimize/restore/resize a specific app's window
-- List currently running apps/windows as a Rigel query
-- App-specific actions beyond generic window ops (e.g. "new tab in Chrome")
+- More handlers (Finder, Terminal, Slack, ...)
+- Generic window ops (focus/minimize) as their own lightweight handler for
+  apps that don't need a full custom tool set
+- Route `registry.match()` ambiguity (or misses) through the LLM instead of
+  keyword matching
+- Ollama support for `_app_commands()`
 
 ## Related Features
 - Approval-gated execution layer for open/close app + file CRUD (`sidecar/executor.py`)
 - Per-action/target whitelist (`desktop/src/components/WhitelistSettings.jsx`)
 
 ## References
-- `sidecar/executor.py`
-- `sidecar/brain.py`
-- `desktop/src/components/CommandApproval.jsx`
-- `desktop/src/components/WhitelistSettings.jsx`
-- `README.md` — "Project Status" section (real command execution deferred slice)
+- `sidecar/handlers/base.py`, `registry.py`, `window_ops.py`
+- `sidecar/handlers/chrome.py`, `vscode.py`
+- `sidecar/brain.py`, `llm_providers.py`, `executor.py`, `app.py`
+- `desktop/src/components/CommandApproval.jsx`, `WhitelistSettings.jsx`

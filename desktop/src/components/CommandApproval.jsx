@@ -8,6 +8,12 @@
 import { approveCommand, rejectCommand } from "../api.js";
 
 function describe(cmd) {
+  if (cmd.action === "app_action") {
+    const { app_id, tool, tool_args } = cmd.args;
+    const label = String(tool ?? "").replace(/_/g, " ");
+    const detail = Object.values(tool_args ?? {}).filter(Boolean).join(", ");
+    return `${app_id}: ${label}${detail ? ` (${detail})` : ""}`.trim();
+  }
   const label = cmd.action.replace(/_/g, " ");
   const target = cmd.args.target ?? cmd.args.path ?? "";
   return `${label} ${target}`.trim();
