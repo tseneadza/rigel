@@ -14,6 +14,10 @@ function describe(cmd) {
     const detail = Object.values(tool_args ?? {}).filter(Boolean).join(", ");
     return `${app_id}: ${label}${detail ? ` (${detail})` : ""}`.trim();
   }
+  if (cmd.action === "click_menu_item") {
+    const { app, menu_path } = cmd.args;
+    return `${app}: ${(menu_path ?? []).join(" > ")}`.trim();
+  }
   const label = cmd.action.replace(/_/g, " ");
   const target = cmd.args.target ?? cmd.args.path ?? "";
   return `${label} ${target}`.trim();

@@ -26,12 +26,16 @@ deterministic answer) and never produces a command, so it's never
 approval-gated.
 
 Last, if nothing above produced any commands at all, ``respond()`` tries
-one more thing before returning: ``_menu_action_note`` (Slice 3 of App
-Menu Actions, see ``docs/proposals/menu-actions.md``) fuzzy-matches ``text``
-against the resolved target app's real menu bar and, on a match, appends a
-note describing what it *would* click — still read-only, still no command,
-since ``click_menu_item`` execution is Slice 4's job. Also no LLM call:
-app resolution, menu discovery, and fuzzy matching are all deterministic.
+one more thing before returning: ``_menu_action_commands`` (App Menu
+Actions, see ``docs/proposals/menu-actions.md``) fuzzy-matches ``text``
+against the resolved target app's real menu bar. A single confident match
+becomes a real ``click_menu_item`` command — approval-gated through
+``executor.py`` exactly like any other command (Slice 4). A no-match or a
+genuine tie between multiple candidates produces no command (there's
+nothing safe to act on) but still appends an informational note to the
+reply, same as Slice 3's read-only behavior — there's no approval card to
+represent "I'm not sure which of these you meant." Also no LLM call: app
+resolution, menu discovery, and fuzzy matching are all deterministic.
 """
 from __future__ import annotations
 
@@ -142,7 +146,8 @@ def respond(text: str, llm_config: dict | None = None) -> tuple[str, list[dict]]
 
     reply, commands = _respond_via_provider(text, llm_config)
     if not commands:
-        note = _menu_action_note(text)
+        menu_commands, note = _menu_action_commands(text)
+        commands = menu_commands
         if note:
             reply = f"{reply} {note}"
     return reply, commands
@@ -231,41 +236,44 @@ def _resolve_target_app(text: str) -> str | None:
     return best
 
 
-def _menu_action_note(text: str) -> str | None:
-    """Slice 3 of App Menu Actions (docs/proposals/menu-actions.md):
-    read-only. If ``text`` plausibly names an action (see
-    ``_MENU_ACTION_VERB_HINT``) and fuzzy-matches a menu item in the
-    resolved target app, report what Rigel *would* click — never a
-    command, never executed. Returns ``None`` on no verb hint, no
-    resolvable target app, no menu access (permission, app not running),
-    or no fuzzy match — every one of those is a quiet no-op, not an error
-    surfaced to the user, since this is a best-effort hint layered onto an
-    already-complete reply, not something the user asked for directly."""
+def _menu_action_commands(text: str) -> tuple[list[dict], str | None]:
+    """App Menu Actions (docs/proposals/menu-actions.md), Slice 4: real
+    execution on a confident match, still read-only-style reporting on an
+    ambiguous one. If ``text`` plausibly names an action (see
+    ``_MENU_ACTION_VERB_HINT``) and fuzzy-matches exactly one menu item in
+    the resolved target app, returns a single ``click_menu_item`` command
+    — approval-gated through ``executor.py`` exactly like any other
+    command, never executed here. A genuine tie between multiple
+    candidates returns no command (nothing here should guess which one)
+    but a note describing the candidates, same as Slice 3; a no-match, no
+    verb hint, no resolvable app, or no menu access (permission, app not
+    running) returns ``([], None)`` — every one of those is a quiet no-op,
+    not an error surfaced to the user, since this is a best-effort
+    addition to an already-complete reply, not something asked for
+    directly."""
     if not _MENU_ACTION_VERB_HINT.search(text):
-        return None
+        return [], None
     app = _resolve_target_app(text)
     if app is None:
         try:
             app = menu_actions.frontmost_app()
         except menu_actions.MenuDiscoveryError:
-            return None
+            return [], None
     if app is None:
-        return None
+        return [], None
     try:
         menu = menu_actions.discover_menu(app)
     except menu_actions.MenuDiscoveryError:
-        return None
+        return [], None
     matches = menu_actions.fuzzy_match(text, menu)
     if not matches:
-        return None
+        return [], None
     if len(matches) == 1:
         path, _ratio = matches[0]
-        return (
-            f"(If you meant a menu action: I'd click {' > '.join(path)} in "
-            f"{app} — not wired up to actually run yet.)"
-        )
+        return ([{"action": "click_menu_item", "args": {"app": app, "menu_path": path}}], None)
     options = "; or ".join(" > ".join(path) for path, _ratio in matches)
-    return (
+    note = (
         f"(That could be a few different menu actions in {app}: {options} — "
-        f"not sure which, so I didn't guess. Not wired up to actually run yet either way.)"
+        f"not sure which, so I didn't guess.)"
     )
+    return [], note

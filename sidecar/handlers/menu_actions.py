@@ -36,8 +36,21 @@ Accessibility grant either (only walking a specific app's UI elements, as
 phrase against a discovered menu's real item labels by word-token overlap,
 stdlib-only (``re``, matching this repo's no-casual-new-deps convention).
 Still no clicking — ``sidecar/brain.py`` uses this to report what it
-*would* click, not to click it. Slice 4 is the only slice that calls
-``click_menu_item()`` (not implemented yet) for real.
+*would* click, not to click it.
+
+``click_menu_item()`` (Slice 4) is the only function in this module that
+actually acts: given a menu path already discovered and matched, click it
+for real. Unlike ``discover_menu()``/``frontmost_app()``/
+``list_running_apps()``, which *raise* ``MenuDiscoveryError`` (they're
+called from ``brain.py``'s command-detection phase, before anything is
+logged or approved), ``click_menu_item()`` follows ``executor.py``'s
+``(status, detail)``-tuple, never-raises contract instead — it's called
+from ``executor.execute()``, alongside every other action's execution
+path, and by the time it runs the click has already been through preview
+and approval. ``is_dangerous()`` is the other Slice 4 piece:
+``executor.is_whitelisted()`` consults it before anything else, and a
+dangerous-sounding item always requires approval — even with the app's
+whitelist entry set to ``all: true``.
 """
 from __future__ import annotations
 
@@ -294,6 +307,79 @@ def fuzzy_match(
     return [item for item in scored if top_ratio - item[1] <= _FUZZY_MATCH_TIE_MARGIN][
         :_FUZZY_MATCH_MAX_CANDIDATES
     ]
+
+
+# Checked case-insensitively against a menu path's full joined text, so a
+# multi-word phrase like "empty trash" matches regardless of which segment
+# it lands in, and a single-word item like "Quit" or "Reset" still matches
+# even though real apps also use these words in harmless contexts ("Reset
+# Zoom", "Quit and Keep Windows") — the list is deliberately conservative
+# (over-block rather than under-block), since the cost of a false positive
+# here is "approve one extra time," not "silently ran something risky."
+_DANGEROUS_KEYWORDS = frozenset({
+    "delete", "erase", "empty trash", "format", "quit", "uninstall",
+    "remove", "discard", "reset", "wipe", "destroy",
+})
+
+
+def is_dangerous(menu_path: list[str]) -> bool:
+    """True if any word/phrase in ``_DANGEROUS_KEYWORDS`` appears anywhere
+    in ``menu_path``'s joined text. ``executor.is_whitelisted()`` treats
+    this as an unconditional override — see this module's docstring."""
+    haystack = " ".join(menu_path).lower()
+    return any(keyword in haystack for keyword in _DANGEROUS_KEYWORDS)
+
+
+def _click_menu_item_script(app_name: str, menu_path: list[str]) -> str:
+    """Build the nested ``menu item "X" of menu 1 of ...`` AppleScript
+    reference matching ``menu_path``'s exact depth — the standard macOS
+    scripting idiom for reaching a specific (possibly nested) menu item by
+    name, mirroring the same ancestor chain ``discover_menu()``'s own walk
+    used to find it (``menu 1 of <parent>`` at every level)."""
+    leaf = _quote(menu_path[-1])
+    ancestors = menu_path[:-1]
+    ref = f"menu bar item {_quote(ancestors[0])} of menu bar 1"
+    for name in ancestors[1:]:
+        ref = f"menu item {_quote(name)} of menu 1 of {ref}"
+    target = f"menu item {leaf} of menu 1 of {ref}"
+    return f'tell application "System Events" to tell process {_quote(app_name)} to click {target}'
+
+
+def click_menu_item(app_name: str, menu_path: list[str]) -> tuple[str, str]:
+    """Click the menu item at ``menu_path`` (as returned by
+    ``discover_menu()``/matched by ``fuzzy_match()``) in ``app_name``.
+
+    Returns ``(status, detail)`` with ``status`` one of ``'ok' | 'error'``
+    — never raises, matching ``executor._execute_macos``'s contract (see
+    this module's docstring for why this function differs from the rest
+    of the module on that point). Does not re-verify the path still exists
+    before clicking — by the time this runs, the path was already
+    discovered live and matched against the user's own phrase; a stale
+    path (app quit, menu changed) surfaces as an ordinary AppleScript
+    error below, same as any other execution failure.
+    """
+    if not menu_path:
+        return ("error", "no menu path given.")
+    script = _click_menu_item_script(app_name, menu_path)
+    try:
+        stdout, stderr, returncode = _run_osascript(script)
+    except MenuDiscoveryError as e:
+        # _run_osascript raises for "osascript isn't on this machine at
+        # all" — every other function in this module lets that propagate
+        # (they're called before anything is logged/approved), but this
+        # one is an executor.execute() path and must never raise.
+        return ("error", str(e))
+    if returncode != 0:
+        if _permission_denied(stderr):
+            return (
+                "error",
+                "Rigel doesn't have Accessibility permission yet — grant it in "
+                "System Settings -> Privacy & Security -> Accessibility, then retry.",
+            )
+        if _process_not_found(stderr):
+            return ("error", f"'{app_name}' isn't running.")
+        return ("error", stderr.strip() or f"failed to click {' > '.join(menu_path)} in {app_name}.")
+    return ("ok", f"Clicked {' > '.join(menu_path)} in {app_name}.")
 
 
 def _main() -> None:

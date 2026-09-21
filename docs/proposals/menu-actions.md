@@ -14,14 +14,17 @@ resolved. This doc folds that note into the framework built since.
 
 ## Status
 - [ ] Planned
-- [x] In Development
+- [ ] In Development
+- [x] Alpha/Beta
 - [ ] Incubating
-- [ ] Alpha/Beta
 - [ ] Production
 
 *(Maps the source note's `status: ready` onto this repo's vocabulary; now
-`In Development` — Slice 1 has landed, see Progress Log. That note lives
-outside this repo and can't be written back to from here; update it
+`Alpha/Beta` — all 5 originally-scoped slices are code-complete as of
+Slice 4 (see Progress Log), including the Slice 5 safety pass, folded in
+rather than staged separately. What's left is real-hardware verification
+of the click itself, not new development. That note lives outside this
+repo and can't be written back to from here; update it
 manually if you want its frontmatter to reflect this doc.)*
 
 ## Progress Log
@@ -99,6 +102,47 @@ manually if you want its frontmatter to reflect this doc.)*
     path at all, and an existing command (e.g. `open Chrome`) never
     getting a menu note appended alongside it. Not yet tried against a
     real discovered menu on real hardware.
+- **Slice 4 landed**: real execution. `menu_actions.click_menu_item()`
+  builds the nested `menu item "X" of menu 1 of ...` AppleScript reference
+  matching a path's exact depth and clicks it — the one function in this
+  module that follows `executor.py`'s never-raises `(status, detail)`
+  contract rather than raising `MenuDiscoveryError`, since it's called
+  from `executor.execute()`, after preview/approval, not from `brain.py`'s
+  detection phase. `menu_actions.is_dangerous()` is the safety piece: a
+  fixed keyword list (delete, erase, empty trash, format, quit, uninstall,
+  ..., deliberately over-broad — a false positive here just costs one
+  extra approval) checked against a path's full text; `executor.py`'s
+  `is_whitelisted()` consults it *before* anything else and forces
+  approval unconditionally on a match, even with that app's whitelist
+  entry set to `all: true` — the one whitelist override in the whole
+  codebase, since a dynamically-discovered menu item's label can't be
+  vetted in advance the way a fixed action or tool name can be.
+  `sidecar/brain.py`'s `_menu_action_note` became `_menu_action_commands`:
+  a single confident fuzzy match now returns a real `click_menu_item`
+  command (approval-gated, same pipeline as every other command); a
+  genuine tie still returns no command and the same Slice-3-style
+  informational note, since nothing should guess between two candidates.
+  `whitelist_config` gained `click_menu_item: {app: {all, menu_paths}}`
+  (`app.py`), and `CommandApproval.jsx` renders it as `"iTerm2: File > New
+  Window"`. **Deliberately out of scope for this slice**: no
+  `WhitelistSettings.jsx` section for `click_menu_item` yet — unlike
+  `app_action`'s fixed, enumerable handler+tool list (fed by `GET
+  /handlers`), there's no fixed set of (app, menu path) pairs to list
+  ahead of time; pre-populating this whitelist needs either manual entry
+  or a "remember this" affordance on the approval card itself, either of
+  which is its own small feature, not implied by "wire click_menu_item
+  through the whitelist pipeline."
+  Fully verified: `executor.preview()`/`is_whitelisted()`/`execute()` for
+  `click_menu_item` (including the dangerous-item-overrides-whitelist
+  case, and confirming `click_menu_item()` never raises even when
+  `osascript` is entirely missing); the whitelist API round-trips a
+  `click_menu_item` entry correctly; `brain.py` produces a real command on
+  a confident match and still no command on a tie; every previously-tested
+  path (plain chat, `open Chrome`, "what apps are open?") is unaffected;
+  frontend builds clean. Not yet tried against a real click on real
+  hardware — this is the first slice where something actually executes,
+  so that's the one thing this environment genuinely cannot substitute a
+  mock for.
 
 ## Architectural Decision — how this fits the `AppHandler` framework
 This is the one thing the source note couldn't resolve, since it predates
@@ -225,9 +269,14 @@ single flat target string):
    `brain.py` fallback so a reply says what it *would* click, without
    calling `click_menu_item`.
 4. **Real execution** — `click_menu_item` through `executor.py`'s
-   preview/whitelist/execute/log pipeline for real.
-5. **Safety pass** — `is_dangerous()` hard-block list, tested against
-   Slice 4, before enabling by default.
+   preview/whitelist/execute/log pipeline for real. **Landed** — and folds
+   in Slice 5 below: it would have been unsafe to ship real execution
+   without the hard-block already in place, so `is_dangerous()` was built
+   as part of `is_whitelisted()` from the start rather than staged as a
+   separate follow-up.
+5. ~~**Safety pass** — `is_dangerous()` hard-block list, tested against
+   Slice 4, before enabling by default.~~ Folded into Slice 4 (see above)
+   rather than done as a separate pass afterward.
 
 ## Configuration
 `whitelist_config` gains `click_menu_item: {app_id: {"all": bool, "menu_paths": [[str, ...], ...]}}`

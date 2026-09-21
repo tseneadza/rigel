@@ -101,12 +101,21 @@ class AppActionWhitelist(BaseModel):
     tools: list[str] = []      # auto-approve only these specific tool names
 
 
+class MenuActionWhitelist(BaseModel):
+    all: bool = False                  # auto-approve every menu click for this app
+    menu_paths: list[list[str]] = []   # auto-approve only these specific menu paths
+    # Note: executor.is_whitelisted() still forces approval for a
+    # dangerous-sounding item (menu_actions.is_dangerous()) regardless of
+    # either field here — see executor.py's is_whitelisted docstring.
+
+
 class WhitelistConfig(BaseModel):
     open_app: ActionWhitelist = ActionWhitelist()
     close_app: ActionWhitelist = ActionWhitelist()
     create_file: ActionWhitelist = ActionWhitelist()
     delete_file: ActionWhitelist = ActionWhitelist()
-    app_action: dict[str, AppActionWhitelist] = {}   # keyed by app_id
+    app_action: dict[str, AppActionWhitelist] = {}       # keyed by app_id
+    click_menu_item: dict[str, MenuActionWhitelist] = {}  # keyed by app process name
 
 
 @app.get("/api/rigel/health")
