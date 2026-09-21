@@ -77,6 +77,15 @@ def _permission_denied(stderr: str) -> bool:
     return "not allowed assistive access" in lowered or "-1719" in stderr
 
 
+def _process_not_found(stderr: str) -> bool:
+    # System Events reports this as error -1728 ("Can't get process
+    # <name>") when no process by that name is running — confirmed live
+    # against a not-currently-running Safari. Distinct from a permission
+    # error, so it gets its own clean message rather than falling through
+    # to raw AppleScript text.
+    return "-1728" in stderr
+
+
 def frontmost_app() -> str | None:
     """Name of the frontmost app's process, e.g. ``"Google Chrome"``.
 
@@ -167,6 +176,8 @@ def discover_menu(app_name: str) -> list[list[str]]:
                 "Rigel doesn't have Accessibility permission yet — grant it in "
                 "System Settings -> Privacy & Security -> Accessibility, then retry."
             )
+        if _process_not_found(stderr):
+            raise MenuDiscoveryError(f"'{app_name}' isn't running.")
         raise MenuDiscoveryError(stderr.strip() or f"failed to discover {app_name}'s menu bar.")
     lines = [line for line in stdout.splitlines() if line.strip()]
     return [line.split("|||") for line in lines]
