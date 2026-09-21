@@ -1,5 +1,14 @@
 # Feature: Expanded App-Operation Control
 
+> **This proposal is superseded by real documentation** now that the
+> framework and both concrete handlers are code-complete:
+> [`docs/features/app-handlers.md`](../features/app-handlers.md) ·
+> [`docs/architecture/app-handlers.md`](../architecture/app-handlers.md) ·
+> [`docs/api/handler-endpoints.md`](../api/handler-endpoints.md) ·
+> [`docs/troubleshooting/app-handlers.md`](../troubleshooting/app-handlers.md).
+> This doc stays as the working design record (the Progress Log below has
+> build-order detail the finished docs summarize rather than repeat).
+
 ## Overview
 Rigel detects open/close app intents and executes them through an
 approval-gated execution layer, with a per-action/target whitelist to skip

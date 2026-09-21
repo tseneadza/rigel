@@ -1,5 +1,16 @@
 # Feature: App Menu Actions (Dynamic Menu-Bar Execution)
 
+> **This proposal is superseded by real documentation** now that all 5
+> slices are code-complete:
+> [`docs/features/menu-actions.md`](../features/menu-actions.md) ·
+> [`docs/architecture/menu-actions.md`](../architecture/menu-actions.md) ·
+> [`docs/api/menu-actions-endpoints.md`](../api/menu-actions-endpoints.md) ·
+> [`docs/troubleshooting/menu-actions.md`](../troubleshooting/menu-actions.md).
+> This doc stays as the working design record — the Progress Log below has
+> the exact real-hardware verification history (including the fuzzy-match
+> algorithm's two false starts) the finished docs summarize rather than
+> repeat.
+
 ## Overview
 Today Rigel's execution layer knows a small fixed verb list
 (`open_app`/`close_app`/`create_file`/`delete_file`), plus, as of the
