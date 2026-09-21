@@ -7,6 +7,9 @@ while keeping the "always reply, log everything" guarantee Rigel was built
 with from day one.
 
 ## High-Level Diagram
+This diagram is scoped to provider selection only — `brain.respond()` now
+wraps this whole box with a pre-check and two post-checks that this
+feature never touches (see "Scope note" below the diagram).
 ```
 ┌────────────────────┐   GET/POST llm-config   ┌────────────────────┐
 │  SettingsPanel.jsx  │◀───────────────────────▶│  settings table    │
@@ -29,6 +32,17 @@ with from day one.
                           │                │
                      LLMError ────────▶ fall back to stub
 ```
+
+**Scope note:** `respond()` itself now does more than this diagram shows —
+a pure-read "what apps are open" intercept runs *before* any of this
+(`_running_apps_reply`, skips the provider entirely for a deterministic
+answer); per-app handler routing (`_app_commands`) and a menu-action
+fallback (`_menu_action_commands`) both run *after* whichever branch above
+returns, adding commands the provider itself never detected. Both are
+separate features with their own architecture docs —
+[`docs/architecture/app-handlers.md`](app-handlers.md) and
+[`docs/architecture/menu-actions.md`](menu-actions.md) — this doc only
+covers the box in the middle: which brain answers with a reply.
 
 ## Components
 
@@ -53,7 +67,11 @@ with from day one.
 - **Purpose:** Dispatch + fallback. Unchanged regex stub is now
   `_stub_respond`; `respond(text, llm_config)` tries the configured
   provider first, catches `LLMError`, logs a warning, and falls back to
-  `_stub_respond`.
+  `_stub_respond`. (This provider dispatch was later split into its own
+  `_respond_via_provider()` helper so two unrelated features — App
+  Handlers and App Menu Actions — could layer their own logic around it
+  without duplicating the stub/Claude/Ollama branching three times; see
+  their own architecture docs for what they each add.)
 
 ### `desktop/src/components/SettingsPanel.jsx` (new)
 - **Purpose:** Single settings surface (Orb + Brain tabs) — consolidates

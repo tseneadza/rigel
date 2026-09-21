@@ -10,6 +10,32 @@ When ``llm_config`` selects a real provider (Claude or Ollama, see
 commands. If the provider call fails for any reason (no API key, model
 unreachable, bad JSON back), this module falls back to the original regex
 stub rather than leaving the user without a reply.
+
+On top of that shared four-verb pass (open/close app, create/delete file),
+``respond()`` separately checks whether ``text`` matches a registered
+``AppHandler`` (see ``sidecar/handlers/``) — an app's own richer vocabulary
+("new tab in Chrome") that the shared schema can't express. A match adds
+one or more ``app_action`` commands via that handler's own scoped Claude
+call (``_app_commands``); it never replaces or blocks the shared pass's
+reply and commands, only adds to them.
+
+Before any of that, ``respond()`` also checks for a "what apps are open"
+style query and answers it directly (``_running_apps_reply``) — a pure
+read, so it skips the provider entirely (no LLM call needed for a fully
+deterministic answer) and never produces a command, so it's never
+approval-gated.
+
+Last, if nothing above produced any commands at all, ``respond()`` tries
+one more thing before returning: ``_menu_action_commands`` (App Menu
+Actions, see ``docs/proposals/menu-actions.md``) fuzzy-matches ``text``
+against the resolved target app's real menu bar. A single confident match
+becomes a real ``click_menu_item`` command — approval-gated through
+``executor.py`` exactly like any other command (Slice 4). A no-match or a
+genuine tie between multiple candidates produces no command (there's
+nothing safe to act on) but still appends an informational note to the
+reply, same as Slice 3's read-only behavior — there's no approval card to
+represent "I'm not sure which of these you meant." Also no LLM call: app
+resolution, menu discovery, and fuzzy matching are all deterministic.
 """
 from __future__ import annotations
 
@@ -17,6 +43,7 @@ import logging
 import re
 
 from sidecar import llm_providers
+from sidecar.handlers import menu_actions, registry
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +64,30 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 # needs (`open -a "the Chrome app"` won't resolve). Strip it off the capture.
 _LEADING_FILLER = re.compile(r"^(?:the|a|an|my|out of)\s+", re.I)
 _TRAILING_FILLER = re.compile(r"(?:\s+(?:app|application|now|please|for me))+$", re.I)
+
+# Matches "what apps are open", "which applications are running", "what's
+# open", etc. Deliberately narrow (an app/application noun, or the "what's
+# open" short form) so it doesn't fire on unrelated uses of "open"/"running"
+# elsewhere in a sentence — this bypasses the LLM entirely, so a false match
+# would silently swallow a real request instead of just answering it wrong.
+_RUNNING_APPS_QUERY = re.compile(
+    r"\b(?:what|which)(?:'s|\s+is|\s+are)?\s+(?:apps?|applications?)\s+(?:are\s+|is\s+)?(?:open|running)\b"
+    r"|\bwhat'?s\s+(?:open|running)\b",
+    re.I,
+)
+
+# Cheap pre-filter for _menu_action_note(): resolving a target app and
+# walking its full menu bar is a real AppleScript round trip (467 items for
+# a real iTerm2, timed live during Slice 1/2 testing) — worth paying only
+# when the phrase plausibly names an action at all. Plain conversation
+# ("thanks", "how's it going") never reaches menu_actions because of this
+# gate, not because fuzzy_match() would happen to score it low.
+_MENU_ACTION_VERB_HINT = re.compile(
+    r"\b(close|open|new|save|copy|paste|cut|undo|redo|print|export|import|"
+    r"quit|minimize|maximize|zoom|find|search|show|hide|start|stop|create|"
+    r"delete|clear|duplicate|split|merge|switch|toggle|enable|disable|reset)\b",
+    re.I,
+)
 
 
 def _clean_target(raw: str) -> str:
@@ -85,16 +136,37 @@ def respond(text: str, llm_config: dict | None = None) -> tuple[str, list[dict]]
     regex stub.
     """
     text = text.strip()
-    provider = (llm_config or {}).get("provider", "stub")
 
     if not text:
         return ("Standing by.", [])
 
+    running_apps_reply = _running_apps_reply(text)
+    if running_apps_reply is not None:
+        return (running_apps_reply, [])
+
+    reply, commands = _respond_via_provider(text, llm_config)
+    if not commands:
+        menu_commands, note = _menu_action_commands(text)
+        commands = menu_commands
+        if note:
+            reply = f"{reply} {note}"
+    return reply, commands
+
+
+def _respond_via_provider(text: str, llm_config: dict | None) -> tuple[str, list[dict]]:
+    """The original provider dispatch (stub, Claude, or Ollama), unchanged
+    in behavior — split out of ``respond()`` so Slice 3's read-only menu
+    note can be layered on top of *any* provider's result in one place,
+    rather than duplicated into every branch below."""
+    provider = (llm_config or {}).get("provider", "stub")
+
     if provider == "claude":
         try:
-            return llm_providers.claude_respond(text, llm_config["claude_model"])
+            reply, commands = llm_providers.claude_respond(text, llm_config["claude_model"])
         except llm_providers.LLMError as e:
             logger.warning("Claude brain failed (%s); falling back to stub.", e)
+        else:
+            return reply, commands + _app_commands(text, llm_config)
     elif provider == "ollama":
         try:
             return llm_providers.ollama_respond(
@@ -106,3 +178,102 @@ def respond(text: str, llm_config: dict | None = None) -> tuple[str, list[dict]]
             logger.warning("Ollama brain failed (%s); falling back to stub.", e)
 
     return _stub_respond(text)
+
+
+def _running_apps_reply(text: str) -> str | None:
+    """Direct answer to a "what apps are open" style query, or ``None`` if
+    ``text`` isn't one. A pure read — never produces a command, so it's
+    never approval-gated, and it's checked before any provider call since
+    the answer is fully deterministic (no LLM needed to look up a fact)."""
+    if not _RUNNING_APPS_QUERY.search(text):
+        return None
+    try:
+        apps = menu_actions.list_running_apps()
+    except menu_actions.MenuDiscoveryError as e:
+        return f"I couldn't check what's open: {e}"
+    if not apps:
+        return "I couldn't find any open apps."
+    return "Open apps: " + ", ".join(apps) + "."
+
+
+def _app_commands(text: str, llm_config: dict) -> list[dict]:
+    """Route ``text`` to a matching per-app handler's own scoped Claude
+    call, if one matches. Handler support is Claude-only for now — Ollama's
+    JSON-mode prompting (see ``ollama_respond``) doesn't have an equivalent
+    to real tool-use, so extending this to Ollama needs its own design
+    rather than reusing ``claude_app_action`` as-is. Failure here (no match,
+    or the scoped call itself failing) never blocks the reply already
+    produced by the shared four-verb pass — it only ever adds commands, and
+    an empty list is a perfectly normal outcome, not a fallback condition.
+    """
+    handler = registry.match(text)
+    if handler is None:
+        return []
+    try:
+        return llm_providers.claude_app_action(text, llm_config["claude_model"], handler)
+    except llm_providers.LLMError as e:
+        logger.warning("App handler '%s' call failed (%s); skipping.", handler.app_id, e)
+        return []
+
+
+def _resolve_target_app(text: str) -> str | None:
+    """If ``text`` names one of the currently-running apps, return that
+    app's process name; otherwise ``None`` (caller falls back to
+    frontmost). Checked against *running* apps rather than a fixed list so
+    this works for any app — Finder, Safari, anything — consistent with
+    the "any running app" scope decided in the source scoping note, not
+    just apps with a registered ``AppHandler``. Longest name wins if more
+    than one running app's name appears in the text."""
+    try:
+        running = menu_actions.list_running_apps()
+    except menu_actions.MenuDiscoveryError:
+        return None
+    lowered = text.lower()
+    best: str | None = None
+    for name in running:
+        if name.lower() in lowered and (best is None or len(name) > len(best)):
+            best = name
+    return best
+
+
+def _menu_action_commands(text: str) -> tuple[list[dict], str | None]:
+    """App Menu Actions (docs/proposals/menu-actions.md), Slice 4: real
+    execution on a confident match, still read-only-style reporting on an
+    ambiguous one. If ``text`` plausibly names an action (see
+    ``_MENU_ACTION_VERB_HINT``) and fuzzy-matches exactly one menu item in
+    the resolved target app, returns a single ``click_menu_item`` command
+    — approval-gated through ``executor.py`` exactly like any other
+    command, never executed here. A genuine tie between multiple
+    candidates returns no command (nothing here should guess which one)
+    but a note describing the candidates, same as Slice 3; a no-match, no
+    verb hint, no resolvable app, or no menu access (permission, app not
+    running) returns ``([], None)`` — every one of those is a quiet no-op,
+    not an error surfaced to the user, since this is a best-effort
+    addition to an already-complete reply, not something asked for
+    directly."""
+    if not _MENU_ACTION_VERB_HINT.search(text):
+        return [], None
+    app = _resolve_target_app(text)
+    if app is None:
+        try:
+            app = menu_actions.frontmost_app()
+        except menu_actions.MenuDiscoveryError:
+            return [], None
+    if app is None:
+        return [], None
+    try:
+        menu = menu_actions.discover_menu(app)
+    except menu_actions.MenuDiscoveryError:
+        return [], None
+    matches = menu_actions.fuzzy_match(text, menu)
+    if not matches:
+        return [], None
+    if len(matches) == 1:
+        path, _ratio = matches[0]
+        return ([{"action": "click_menu_item", "args": {"app": app, "menu_path": path}}], None)
+    options = "; or ".join(" > ".join(path) for path, _ratio in matches)
+    note = (
+        f"(That could be a few different menu actions in {app}: {options} — "
+        f"not sure which, so I didn't guess.)"
+    )
+    return [], note

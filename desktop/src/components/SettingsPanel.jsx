@@ -48,6 +48,7 @@ const DEFAULT_WHITELIST_CONFIG = {
   close_app: { all: false, targets: [] },
   create_file: { all: false, targets: [] },
   delete_file: { all: false, targets: [] },
+  app_action: {},
 };
 
 const FIT_LABEL = {
