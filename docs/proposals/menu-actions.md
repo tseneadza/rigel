@@ -32,9 +32,21 @@ manually if you want its frontmatter to reflect this doc.)*
   imported by `brain.py`/`executor.py`/`sidecar/handlers/__init__.py` yet —
   Slice 1 is standalone by design. Runnable directly on a Mac:
   `python3 -m sidecar.handlers.menu_actions ["App Name"]`
-  (defaults to the frontmost app). Not yet exercised against a real macOS
-  Accessibility permission grant — this environment is Linux-only; needs
-  verification on real hardware before Slice 2 starts.
+  (defaults to the frontmost app).
+- **Slice 1 validated on real hardware.** After granting Accessibility
+  permission (System Settings -> Privacy & Security -> Accessibility),
+  `discover_menu("iTerm2")` correctly enumerated all 467 real menu items,
+  including nested submenus to the intended depth (e.g. `Apple > Recent
+  Items > Applications`). `frontmost_app()` needs no Accessibility grant at
+  all (confirmed — it errored only once discovery, not frontmost
+  detection, was attempted). Two rough edges found and fixed live against
+  real error output: `osascript` missing entirely (this repo's own
+  non-macOS dev sessions) now raises a clean `MenuDiscoveryError` instead
+  of a raw `FileNotFoundError`; a named app that isn't running (error
+  -1728, distinct from a permission error) now raises `"'<app>' isn't
+  running."` instead of surfacing raw AppleScript text. The permission
+  model, the AX tree walk, and both failure paths are now confirmed
+  working end to end — Slice 2 is unblocked.
 
 ## Architectural Decision — how this fits the `AppHandler` framework
 This is the one thing the source note couldn't resolve, since it predates
