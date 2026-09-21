@@ -55,12 +55,15 @@ manually if you want its frontmatter to reflect this doc.)*
   by `_RUNNING_APPS_QUERY` — checked before any provider call, since the
   answer is deterministic and needs no LLM); and a `RunningApps.jsx`
   dropdown in the orb window's header (next to Settings) showing the same
-  list on demand. Not yet exercised on real hardware — the Python/FastAPI
-  side is covered by the same kind of smoke test Slice 1 got (regex
-  intercept, `TestClient` hitting `/running-apps`, confirmed to produce a
-  clean 503 on this non-macOS environment), and the frontend build is
-  clean, but the actual dropdown hasn't been clicked on a running Rigel
-  yet.
+  list on demand.
+- **Slice 2 validated on real hardware.** ▤ dropdown shows real running
+  apps; "what apps are open?" answers directly in chat instead of falling
+  through to the stub. One snag along the way, not a code bug: the sidecar
+  is a plain Python process with no auto-reload, so after `git pull` it
+  kept serving pre-Slice-2 code (a 404 on `/running-apps`, the old stub
+  reply for the chat query) until manually restarted — worth remembering
+  for every future slice too, unlike the Vite frontend dev server, which
+  hot-reloads on its own.
 
 ## Architectural Decision — how this fits the `AppHandler` framework
 This is the one thing the source note couldn't resolve, since it predates
