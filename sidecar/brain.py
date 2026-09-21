@@ -24,6 +24,14 @@ style query and answers it directly (``_running_apps_reply``) — a pure
 read, so it skips the provider entirely (no LLM call needed for a fully
 deterministic answer) and never produces a command, so it's never
 approval-gated.
+
+Last, if nothing above produced any commands at all, ``respond()`` tries
+one more thing before returning: ``_menu_action_note`` (Slice 3 of App
+Menu Actions, see ``docs/proposals/menu-actions.md``) fuzzy-matches ``text``
+against the resolved target app's real menu bar and, on a match, appends a
+note describing what it *would* click — still read-only, still no command,
+since ``click_menu_item`` execution is Slice 4's job. Also no LLM call:
+app resolution, menu discovery, and fuzzy matching are all deterministic.
 """
 from __future__ import annotations
 
@@ -61,6 +69,19 @@ _TRAILING_FILLER = re.compile(r"(?:\s+(?:app|application|now|please|for me))+$",
 _RUNNING_APPS_QUERY = re.compile(
     r"\b(?:what|which)(?:'s|\s+is|\s+are)?\s+(?:apps?|applications?)\s+(?:are\s+|is\s+)?(?:open|running)\b"
     r"|\bwhat'?s\s+(?:open|running)\b",
+    re.I,
+)
+
+# Cheap pre-filter for _menu_action_note(): resolving a target app and
+# walking its full menu bar is a real AppleScript round trip (467 items for
+# a real iTerm2, timed live during Slice 1/2 testing) — worth paying only
+# when the phrase plausibly names an action at all. Plain conversation
+# ("thanks", "how's it going") never reaches menu_actions because of this
+# gate, not because fuzzy_match() would happen to score it low.
+_MENU_ACTION_VERB_HINT = re.compile(
+    r"\b(close|open|new|save|copy|paste|cut|undo|redo|print|export|import|"
+    r"quit|minimize|maximize|zoom|find|search|show|hide|start|stop|create|"
+    r"delete|clear|duplicate|split|merge|switch|toggle|enable|disable|reset)\b",
     re.I,
 )
 
@@ -119,6 +140,19 @@ def respond(text: str, llm_config: dict | None = None) -> tuple[str, list[dict]]
     if running_apps_reply is not None:
         return (running_apps_reply, [])
 
+    reply, commands = _respond_via_provider(text, llm_config)
+    if not commands:
+        note = _menu_action_note(text)
+        if note:
+            reply = f"{reply} {note}"
+    return reply, commands
+
+
+def _respond_via_provider(text: str, llm_config: dict | None) -> tuple[str, list[dict]]:
+    """The original provider dispatch (stub, Claude, or Ollama), unchanged
+    in behavior — split out of ``respond()`` so Slice 3's read-only menu
+    note can be layered on top of *any* provider's result in one place,
+    rather than duplicated into every branch below."""
     provider = (llm_config or {}).get("provider", "stub")
 
     if provider == "claude":
@@ -175,3 +209,63 @@ def _app_commands(text: str, llm_config: dict) -> list[dict]:
     except llm_providers.LLMError as e:
         logger.warning("App handler '%s' call failed (%s); skipping.", handler.app_id, e)
         return []
+
+
+def _resolve_target_app(text: str) -> str | None:
+    """If ``text`` names one of the currently-running apps, return that
+    app's process name; otherwise ``None`` (caller falls back to
+    frontmost). Checked against *running* apps rather than a fixed list so
+    this works for any app — Finder, Safari, anything — consistent with
+    the "any running app" scope decided in the source scoping note, not
+    just apps with a registered ``AppHandler``. Longest name wins if more
+    than one running app's name appears in the text."""
+    try:
+        running = menu_actions.list_running_apps()
+    except menu_actions.MenuDiscoveryError:
+        return None
+    lowered = text.lower()
+    best: str | None = None
+    for name in running:
+        if name.lower() in lowered and (best is None or len(name) > len(best)):
+            best = name
+    return best
+
+
+def _menu_action_note(text: str) -> str | None:
+    """Slice 3 of App Menu Actions (docs/proposals/menu-actions.md):
+    read-only. If ``text`` plausibly names an action (see
+    ``_MENU_ACTION_VERB_HINT``) and fuzzy-matches a menu item in the
+    resolved target app, report what Rigel *would* click — never a
+    command, never executed. Returns ``None`` on no verb hint, no
+    resolvable target app, no menu access (permission, app not running),
+    or no fuzzy match — every one of those is a quiet no-op, not an error
+    surfaced to the user, since this is a best-effort hint layered onto an
+    already-complete reply, not something the user asked for directly."""
+    if not _MENU_ACTION_VERB_HINT.search(text):
+        return None
+    app = _resolve_target_app(text)
+    if app is None:
+        try:
+            app = menu_actions.frontmost_app()
+        except menu_actions.MenuDiscoveryError:
+            return None
+    if app is None:
+        return None
+    try:
+        menu = menu_actions.discover_menu(app)
+    except menu_actions.MenuDiscoveryError:
+        return None
+    matches = menu_actions.fuzzy_match(text, menu)
+    if not matches:
+        return None
+    if len(matches) == 1:
+        path, _ratio = matches[0]
+        return (
+            f"(If you meant a menu action: I'd click {' > '.join(path)} in "
+            f"{app} — not wired up to actually run yet.)"
+        )
+    options = "; or ".join(" > ".join(path) for path, _ratio in matches)
+    return (
+        f"(That could be a few different menu actions in {app}: {options} — "
+        f"not sure which, so I didn't guess. Not wired up to actually run yet either way.)"
+    )

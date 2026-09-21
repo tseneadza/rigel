@@ -1,4 +1,4 @@
-"""Dynamic app-menu discovery — Slice 1 of App Menu Actions.
+"""Dynamic app-menu discovery — Slices 1-3 of App Menu Actions.
 
 See ``docs/proposals/menu-actions.md`` for the full plan. This module is
 deliberately narrow: it can find the frontmost app and enumerate a running
@@ -31,9 +31,17 @@ System Events query as ``frontmost_app()``, just "every foreground process"
 instead of "the frontmost one," and confirmed on real hardware to need no
 Accessibility grant either (only walking a specific app's UI elements, as
 ``discover_menu()`` does, requires it).
+
+``fuzzy_match()`` (Slice 3) is the last read-only piece: matching a spoken
+phrase against a discovered menu's real item labels by word-token overlap,
+stdlib-only (``re``, matching this repo's no-casual-new-deps convention).
+Still no clicking — ``sidecar/brain.py`` uses this to report what it
+*would* click, not to click it. Slice 4 is the only slice that calls
+``click_menu_item()`` (not implemented yet) for real.
 """
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 
@@ -215,6 +223,77 @@ def discover_menu(app_name: str) -> list[list[str]]:
         raise MenuDiscoveryError(stderr.strip() or f"failed to discover {app_name}'s menu bar.")
     lines = [line for line in stdout.splitlines() if line.strip()]
     return [line.split("|||") for line in lines]
+
+
+# fuzzy_match() scores by word-token overlap, not raw character similarity
+# (difflib.SequenceMatcher.ratio() over full strings). Tried that first —
+# it degrades badly once the phrase includes words the menu label doesn't
+# have (very common: the app name itself, "please", filler), diluting the
+# ratio against the candidate's short label. A "partial ratio" (best
+# character match over any same-length window) fixes the dilution but
+# picks up spurious cross-word character coincidences instead (verified
+# live: "minimize the textedit window" ranked "Edit > Copy" above "Window
+# > Minimize" on pure character overlap). Token overlap doesn't have either
+# problem: it asks "how many of this menu item's own distinctive words did
+# the user actually say," which is what the phrase should be judged on.
+_STOPWORDS = frozenset({
+    "the", "a", "an", "this", "that", "these", "those", "in", "on", "to",
+    "of", "for", "my", "please", "now", "it", "its", "me", "and", "or",
+})
+
+# Fraction of a candidate's own (non-stopword) words that must appear in
+# the phrase to count as a match at all — an unrelated candidate can still
+# share a stray common word, so a floor keeps that from being reported as
+# a guess. Ties within tie_margin of the top score are all returned rather
+# than arbitrarily picking one, per the ambiguous-match open question in
+# docs/proposals/menu-actions.md — Slice 3 only *reports* an ambiguous
+# match rather than resolving it (nothing here executes anything yet).
+_FUZZY_MATCH_THRESHOLD = 0.5
+_FUZZY_MATCH_TIE_MARGIN = 0.15
+_FUZZY_MATCH_MAX_CANDIDATES = 3
+
+
+def _tokenize(text: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z0-9]+", text.lower()) if w not in _STOPWORDS}
+
+
+def fuzzy_match(
+    phrase: str, menu_paths: list[list[str]]
+) -> list[tuple[list[str], float]]:
+    """Rank ``menu_paths`` (as returned by ``discover_menu()``) by what
+    fraction of each path's own distinctive words (e.g. ``{"new",
+    "window"}`` for ``["File", "New Window"]``, ignoring stopwords like
+    "the") also appear in ``phrase``.
+
+    Returns an empty list if nothing clears ``_FUZZY_MATCH_THRESHOLD`` — a
+    low-confidence guess is worse than admitting no match, since a future
+    slice will eventually execute whatever this returns. Otherwise returns
+    the top match plus any others within ``_FUZZY_MATCH_TIE_MARGIN`` of its
+    score (capped at ``_FUZZY_MATCH_MAX_CANDIDATES``), sorted best-first —
+    more than one entry means the phrase was genuinely ambiguous, not that
+    the caller should just take ``[0]``.
+    """
+    if not menu_paths:
+        return []
+    phrase_words = _tokenize(phrase)
+    if not phrase_words:
+        return []
+    scored = []
+    for path in menu_paths:
+        candidate_words = _tokenize(" ".join(path))
+        if not candidate_words:
+            continue
+        ratio = len(candidate_words & phrase_words) / len(candidate_words)
+        scored.append((path, ratio))
+    if not scored:
+        return []
+    scored.sort(key=lambda item: item[1], reverse=True)
+    top_ratio = scored[0][1]
+    if top_ratio < _FUZZY_MATCH_THRESHOLD:
+        return []
+    return [item for item in scored if top_ratio - item[1] <= _FUZZY_MATCH_TIE_MARGIN][
+        :_FUZZY_MATCH_MAX_CANDIDATES
+    ]
 
 
 def _main() -> None:

@@ -64,6 +64,41 @@ manually if you want its frontmatter to reflect this doc.)*
   reply for the chat query) until manually restarted — worth remembering
   for every future slice too, unlike the Vite frontend dev server, which
   hot-reloads on its own.
+- **Slice 3 landed**: `menu_actions.fuzzy_match()` and a read-only note
+  layered onto `brain.py`'s reply (`_menu_action_note`) whenever nothing
+  else already produced a command for the utterance — never a command
+  itself, never executed, just "I'd click X > Y in App" (or, on a genuine
+  tie, all tied candidates) appended to whatever reply was already going
+  out. Two design decisions made along the way, beyond what this doc
+  originally specified:
+  - **A verb-hint pre-filter** (`_MENU_ACTION_VERB_HINT`) gates the whole
+    path before anything else runs. Resolving a target app and walking its
+    menu bar is a real AppleScript round trip (467 items for a real
+    iTerm2, per Slice 1's live test) — worth paying only when the phrase
+    plausibly names an action, not on every "thanks" or "how's it going."
+  - **The matching algorithm changed mid-implementation, caught by
+    testing before it shipped.** The first cut scored candidates via
+    `difflib.SequenceMatcher.ratio()` over full strings (phrase vs. menu
+    label) — this degrades badly once the phrase includes words the label
+    doesn't have, which is the common case ("copy this in TextEdit" scored
+    *below* the match threshold against "Edit > Copy", because "in
+    textedit" dilutes the whole-string ratio). A "partial ratio" variant
+    (best character-match window) fixed the dilution but introduced worse
+    failures: it ranked "Edit > Copy" *above* "Window > Minimize" for
+    "minimize the textedit window," on pure character coincidence.
+    Replaced both with **word-token overlap** (what fraction of a menu
+    item's own distinctive words, stopwords excluded, appear in the
+    phrase) — verified correct on every case that broke the character-based
+    approaches, including the ambiguous-tie case. `fuzzy_match()`'s
+    docstring reflects the final algorithm; the module docstring notes why
+    the simpler approaches were rejected.
+  - Fully verified with mocked `discover_menu()`/`list_running_apps()`
+    (this environment has no macOS) for: a single confident match, a
+    genuine tie (reports both candidates), a no-match phrase (silently
+    returns nothing), plain conversation never reaching the AppleScript
+    path at all, and an existing command (e.g. `open Chrome`) never
+    getting a menu note appended alongside it. Not yet tried against a
+    real discovered menu on real hardware.
 
 ## Architectural Decision — how this fits the `AppHandler` framework
 This is the one thing the source note couldn't resolve, since it predates
@@ -119,9 +154,13 @@ step and `executor.py`'s new action call directly:
 - `discover_menu(app_name: str) -> list[list[str]]` — recursive AX walk
   (`get every menu item of every menu of menu bar 1`, descending into
   submenus), returns menu paths like `["File", "Export", "PDF"]`
-- `fuzzy_match(phrase: str, menu_paths: list[list[str]]) -> tuple[list[str], float] | None`
-  — best path + confidence, stdlib `difflib.SequenceMatcher` (matches this
-  repo's no-casual-new-deps convention rather than pulling in rapidfuzz)
+- `fuzzy_match(phrase: str, menu_paths: list[list[str]]) -> list[tuple[list[str], float]]`
+  — ranks by word-token overlap between the phrase and each path's own
+  distinctive words, stdlib `re` only (matches this repo's
+  no-casual-new-deps convention rather than pulling in rapidfuzz); empty
+  list if nothing clears threshold, more than one entry only on a genuine
+  near-tie (see Progress Log for why token overlap replaced two
+  character-similarity approaches tried first)
 - `is_dangerous(menu_path: list[str]) -> bool` — hard keyword block:
   delete, erase, empty trash, format, quit, uninstall, remove, discard,
   reset, ... — checked against every path segment
@@ -135,17 +174,21 @@ New fallback step, engaged only when a target app can actually be
 resolved (named in text, or a frontmost app exists) — never on plain
 conversation, so it can't misfire on unrelated chat:
 ```python
+# Slice 4 sketch — Slice 3's actual _menu_action_note() (landed) only
+# appends a read-only reply note, never a command; this is what turning
+# that into a real, executable command looks like once Slice 4 starts.
+# Reuses Slice 3's _resolve_target_app()/_MENU_ACTION_VERB_HINT as-is.
 def _menu_action_command(text, llm_config) -> list[dict]:
-    if registry.match(text) is not None:
-        return []  # a named handler owns this utterance; don't also guess a menu click
+    if not _MENU_ACTION_VERB_HINT.search(text):
+        return []
     app = _resolve_target_app(text) or menu_actions.frontmost_app()
     if app is None:
         return []
     menu = menu_actions.discover_menu(app)
-    match = menu_actions.fuzzy_match(text, menu)
-    if match is None:
-        return []
-    path, confidence = match
+    matches = menu_actions.fuzzy_match(text, menu)
+    if len(matches) != 1:
+        return []  # no match, or a genuine tie — Slice 4 shouldn't guess either
+    path, confidence = matches[0]
     return [{"action": "click_menu_item", "args": {"app": app, "menu_path": path}}]
 ```
 Called after `_app_commands()` in `respond()`, same additive pattern.
