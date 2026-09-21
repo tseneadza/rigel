@@ -13,16 +13,28 @@ forever. Source: a scoping note captured 2026-09-19 ("Rigel Execution Layer
 resolved. This doc folds that note into the framework built since.
 
 ## Status
-- [x] Planned
+- [ ] Planned
+- [x] In Development
 - [ ] Incubating
-- [ ] In Development
 - [ ] Alpha/Beta
 - [ ] Production
 
-*(Maps the source note's `status: ready` — scope settled, nothing built yet
-— onto this repo's vocabulary. That note lives outside this repo and
-can't be written back to from here; update it manually if you want its
-frontmatter to reflect this doc.)*
+*(Maps the source note's `status: ready` onto this repo's vocabulary; now
+`In Development` — Slice 1 has landed, see Progress Log. That note lives
+outside this repo and can't be written back to from here; update it
+manually if you want its frontmatter to reflect this doc.)*
+
+## Progress Log
+- **Slice 1 landed**: `sidecar/handlers/menu_actions.py` —
+  `frontmost_app()` and `discover_menu()`, both raising
+  `MenuDiscoveryError` on failure (no Accessibility permission, app not
+  running) rather than returning a silently-empty list. Deliberately not
+  imported by `brain.py`/`executor.py`/`sidecar/handlers/__init__.py` yet —
+  Slice 1 is standalone by design. Runnable directly on a Mac:
+  `python3 -m sidecar.handlers.menu_actions ["App Name"]`
+  (defaults to the frontmost app). Not yet exercised against a real macOS
+  Accessibility permission grant — this environment is Linux-only; needs
+  verification on real hardware before Slice 2 starts.
 
 ## Architectural Decision — how this fits the `AppHandler` framework
 This is the one thing the source note couldn't resolve, since it predates
