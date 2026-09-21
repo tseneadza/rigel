@@ -54,7 +54,17 @@ def _quote(value: str) -> str:
 
 
 def _run_osascript(script: str) -> tuple[str, str, int]:
-    result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+    """Run ``osascript``, translating "not on this machine at all" (no
+    macOS — e.g. developing on Linux, as this repo's own sessions
+    sometimes do) into the same raised-error contract as every other
+    failure here, instead of a raw ``FileNotFoundError`` traceback."""
+    try:
+        result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+    except FileNotFoundError as e:
+        raise MenuDiscoveryError(
+            "'osascript' isn't available on this machine — App Menu Actions "
+            "is macOS-only, same as the rest of Rigel's execution layer."
+        ) from e
     return result.stdout, result.stderr, result.returncode
 
 
