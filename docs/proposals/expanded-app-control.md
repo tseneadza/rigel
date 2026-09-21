@@ -176,6 +176,8 @@ registry.register(ChromeHandler())
 - Route `registry.match()` ambiguity (or misses) through the LLM instead of
   keyword matching
 - Ollama support for `_app_commands()`
+- Dynamic menu-bar clicking for any running app, as a fallback tier
+  underneath the handlers here — see `docs/proposals/menu-actions.md`
 
 ## Related Features
 - Approval-gated execution layer for open/close app + file CRUD (`sidecar/executor.py`)
