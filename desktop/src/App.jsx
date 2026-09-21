@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import RigelOrb from "./components/RigelOrb.jsx";
 import ChatConsole from "./components/ChatConsole.jsx";
 import SettingsPanel from "./components/SettingsPanel.jsx";
+import RunningApps from "./components/RunningApps.jsx";
 import { getLogs, getOrbConfig, saveOrbConfig, getVoiceConfig, sendChat } from "./api.js";
 import {
   restoreRestingBounds,
@@ -254,6 +255,7 @@ export default function App() {
         <header className="brandline" data-tauri-drag-region>
           <span className="brand">RIGEL</span>
           <span className="brand-sub">Really Intelligent Graphical Execution Layer</span>
+          <RunningApps />
           <button
             className="settings-btn"
             onClick={() => setSettingsOpen(true)}

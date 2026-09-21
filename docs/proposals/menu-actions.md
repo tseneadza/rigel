@@ -47,6 +47,20 @@ manually if you want its frontmatter to reflect this doc.)*
   running."` instead of surfacing raw AppleScript text. The permission
   model, the AX tree walk, and both failure paths are now confirmed
   working end to end — Slice 2 is unblocked.
+- **Slice 2 landed**: `menu_actions.list_running_apps()` (confirmed to need
+  no Accessibility grant, same as `frontmost_app()`); `GET
+  /api/rigel/running-apps` (503 with a clean message if System Events
+  can't be reached, e.g. non-macOS); a direct, non-approval-gated "what
+  apps are open" reply path in `brain.py` (`_running_apps_reply`, matched
+  by `_RUNNING_APPS_QUERY` — checked before any provider call, since the
+  answer is deterministic and needs no LLM); and a `RunningApps.jsx`
+  dropdown in the orb window's header (next to Settings) showing the same
+  list on demand. Not yet exercised on real hardware — the Python/FastAPI
+  side is covered by the same kind of smoke test Slice 1 got (regex
+  intercept, `TestClient` hitting `/running-apps`, confirmed to produce a
+  clean 503 on this non-macOS environment), and the frontend build is
+  clean, but the actual dropdown hasn't been clicked on a running Rigel
+  yet.
 
 ## Architectural Decision — how this fits the `AppHandler` framework
 This is the one thing the source note couldn't resolve, since it predates

@@ -14,6 +14,7 @@ async function req(path, opts) {
 export const getState = () => req("/api/rigel/state");
 export const getLogs = (limit = 50) => req(`/api/rigel/logs?limit=${limit}`);
 export const getHandlers = () => req("/api/rigel/handlers");
+export const getRunningApps = () => req("/api/rigel/running-apps");
 export const sendChat = (text) =>
   req("/api/rigel/chat", { method: "POST", body: JSON.stringify({ text }) });
 export const approveCommand = (id) =>

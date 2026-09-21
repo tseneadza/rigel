@@ -18,6 +18,12 @@ On top of that shared four-verb pass (open/close app, create/delete file),
 one or more ``app_action`` commands via that handler's own scoped Claude
 call (``_app_commands``); it never replaces or blocks the shared pass's
 reply and commands, only adds to them.
+
+Before any of that, ``respond()`` also checks for a "what apps are open"
+style query and answers it directly (``_running_apps_reply``) — a pure
+read, so it skips the provider entirely (no LLM call needed for a fully
+deterministic answer) and never produces a command, so it's never
+approval-gated.
 """
 from __future__ import annotations
 
@@ -25,7 +31,7 @@ import logging
 import re
 
 from sidecar import llm_providers
-from sidecar.handlers import registry
+from sidecar.handlers import menu_actions, registry
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +52,17 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 # needs (`open -a "the Chrome app"` won't resolve). Strip it off the capture.
 _LEADING_FILLER = re.compile(r"^(?:the|a|an|my|out of)\s+", re.I)
 _TRAILING_FILLER = re.compile(r"(?:\s+(?:app|application|now|please|for me))+$", re.I)
+
+# Matches "what apps are open", "which applications are running", "what's
+# open", etc. Deliberately narrow (an app/application noun, or the "what's
+# open" short form) so it doesn't fire on unrelated uses of "open"/"running"
+# elsewhere in a sentence — this bypasses the LLM entirely, so a false match
+# would silently swallow a real request instead of just answering it wrong.
+_RUNNING_APPS_QUERY = re.compile(
+    r"\b(?:what|which)(?:'s|\s+is|\s+are)?\s+(?:apps?|applications?)\s+(?:are\s+|is\s+)?(?:open|running)\b"
+    r"|\bwhat'?s\s+(?:open|running)\b",
+    re.I,
+)
 
 
 def _clean_target(raw: str) -> str:
@@ -94,10 +111,15 @@ def respond(text: str, llm_config: dict | None = None) -> tuple[str, list[dict]]
     regex stub.
     """
     text = text.strip()
-    provider = (llm_config or {}).get("provider", "stub")
 
     if not text:
         return ("Standing by.", [])
+
+    running_apps_reply = _running_apps_reply(text)
+    if running_apps_reply is not None:
+        return (running_apps_reply, [])
+
+    provider = (llm_config or {}).get("provider", "stub")
 
     if provider == "claude":
         try:
@@ -117,6 +139,22 @@ def respond(text: str, llm_config: dict | None = None) -> tuple[str, list[dict]]
             logger.warning("Ollama brain failed (%s); falling back to stub.", e)
 
     return _stub_respond(text)
+
+
+def _running_apps_reply(text: str) -> str | None:
+    """Direct answer to a "what apps are open" style query, or ``None`` if
+    ``text`` isn't one. A pure read — never produces a command, so it's
+    never approval-gated, and it's checked before any provider call since
+    the answer is fully deterministic (no LLM needed to look up a fact)."""
+    if not _RUNNING_APPS_QUERY.search(text):
+        return None
+    try:
+        apps = menu_actions.list_running_apps()
+    except menu_actions.MenuDiscoveryError as e:
+        return f"I couldn't check what's open: {e}"
+    if not apps:
+        return "I couldn't find any open apps."
+    return "Open apps: " + ", ".join(apps) + "."
 
 
 def _app_commands(text: str, llm_config: dict) -> list[dict]:

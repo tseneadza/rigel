@@ -25,6 +25,12 @@ Events returns a permission error rather than menu data.
 Try it directly on a Mac once Accessibility is granted:
     python3 -m sidecar.handlers.menu_actions            # frontmost app
     python3 -m sidecar.handlers.menu_actions "Safari"    # a named app
+
+``list_running_apps()`` (Slice 2) lives here too — it's the same kind of
+System Events query as ``frontmost_app()``, just "every foreground process"
+instead of "the frontmost one," and confirmed on real hardware to need no
+Accessibility grant either (only walking a specific app's UI elements, as
+``discover_menu()`` does, requires it).
 """
 from __future__ import annotations
 
@@ -104,6 +110,34 @@ def frontmost_app() -> str | None:
         raise MenuDiscoveryError(stderr.strip() or "failed to determine the frontmost app.")
     name = stdout.strip()
     return name or None
+
+
+def list_running_apps() -> list[str]:
+    """Every foreground (non-background-only) running app's process name —
+    the same identifiers ``frontmost_app()``/``discover_menu()`` use.
+
+    Raises ``MenuDiscoveryError`` on failure, same as the rest of this
+    module — confirmed on real hardware this call needs no Accessibility
+    grant (see ``frontmost_app()``'s docstring), but the check is kept for
+    the same reason it's kept there: a future macOS version tightening
+    what counts as "assistive access" shouldn't surface as a raw
+    AppleScript error.
+    """
+    script = (
+        'tell application "System Events" to set appList to name of every '
+        'process whose background only is false\n'
+        "set AppleScript's text item delimiters to linefeed\n"
+        "return appList as text"
+    )
+    stdout, stderr, returncode = _run_osascript(script)
+    if returncode != 0:
+        if _permission_denied(stderr):
+            raise MenuDiscoveryError(
+                "Rigel doesn't have Accessibility permission yet — grant it in "
+                "System Settings -> Privacy & Security -> Accessibility, then retry."
+            )
+        raise MenuDiscoveryError(stderr.strip() or "failed to list running apps.")
+    return [name for name in stdout.splitlines() if name.strip()]
 
 
 # Builds the recursive AX walk as an AppleScript string. Each discovered

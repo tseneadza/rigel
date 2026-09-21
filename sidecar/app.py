@@ -16,6 +16,9 @@ Endpoints (all under /api/rigel):
     GET  /logs    — recent conversation turns + command attempts.
     GET  /handlers — registered app handlers (sidecar/handlers/) and the
                     tools each exposes, for the whitelist UI.
+    GET  /running-apps — every foreground app currently running, for the
+                    orb window's open-apps list. macOS only; 503 elsewhere
+                    or if Accessibility/System Events can't be reached.
     GET  /health  — liveness.
     GET  /settings/orb-config  — persisted orb sizes (expanded/minimized) and
                                   minimized-orb position (or defaults).
@@ -43,7 +46,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from sidecar import brain, db, executor, llm_providers
-from sidecar.handlers import registry
+from sidecar.handlers import menu_actions, registry
 
 RIGEL_PORT = int(os.getenv("RIGEL_PORT", "5140"))
 
@@ -317,6 +320,15 @@ def list_handlers() -> dict:
             for h in registry.all_handlers()
         ]
     }
+
+
+@app.get("/api/rigel/running-apps")
+def running_apps() -> dict:
+    try:
+        apps = menu_actions.list_running_apps()
+    except menu_actions.MenuDiscoveryError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    return {"apps": apps}
 
 
 @app.get("/api/rigel/settings/whitelist-config")
