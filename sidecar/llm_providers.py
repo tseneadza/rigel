@@ -23,6 +23,8 @@ from typing import Any
 import anthropic
 import psutil
 
+from sidecar.handlers.base import AppHandler
+
 logger = logging.getLogger(__name__)
 
 
@@ -166,6 +168,52 @@ def claude_respond(text: str, model: str) -> tuple[str, list[dict]]:
 
     raw = next((b.text for b in response.content if b.type == "text"), "")
     return _parse_response_json(raw)
+
+
+def claude_app_action(text: str, model: str, handler: AppHandler) -> list[dict]:
+    """Ask ``handler``'s own scoped Claude call to turn ``text`` into zero or
+    one ``app_action`` command intents.
+
+    Unlike ``claude_respond``, this doesn't produce a reply — ``brain.py``
+    already has one from the shared four-verb pass. This call exists purely
+    to let a handler's own tool vocabulary (which ``respond``'s fixed
+    ``RESPONSE_SCHEMA`` knows nothing about) decide whether the utterance
+    maps to one of *its* actions, using real Claude tool-use rather than the
+    JSON-schema trick ``RESPONSE_SCHEMA`` relies on — each handler's
+    ``tools`` list varies, so a single shared schema can't describe it.
+    """
+    if model not in CLAUDE_MODELS:
+        raise LLMError(f"unknown Claude model: {model!r}")
+
+    try:
+        client = anthropic.Anthropic()
+        response = client.messages.create(
+            model=model,
+            max_tokens=512,
+            system=handler.system_prompt,
+            tools=handler.tools,
+            tool_choice={"type": "auto"},
+            messages=[{"role": "user", "content": text}],
+        )
+    except anthropic.AuthenticationError as e:
+        raise LLMError(f"Claude authentication failed: {e}") from e
+    except anthropic.RateLimitError as e:
+        raise LLMError(f"Claude rate limited: {e}") from e
+    except anthropic.APIConnectionError as e:
+        raise LLMError(f"Claude connection error: {e}") from e
+    except anthropic.APIStatusError as e:
+        raise LLMError(f"Claude API error ({e.status_code}): {e.message}") from e
+    except TypeError as e:
+        raise LLMError(f"Claude credentials not configured: {e}") from e
+
+    commands = []
+    for block in response.content:
+        if block.type == "tool_use":
+            commands.append({
+                "action": "app_action",
+                "args": {"app_id": handler.app_id, "tool": block.name, "tool_args": block.input},
+            })
+    return commands
 
 
 # ── Ollama ───────────────────────────────────────────────────────────────

@@ -71,6 +71,9 @@ the full exclusion list.
 | [`ChatConsole.jsx`](../desktop/src/components/ChatConsole.jsx) | Text input + scrolling transcript; posts each message to the sidecar via `api.js`. |
 | [`SettingsPanel.jsx`](../desktop/src/components/SettingsPanel.jsx) | Modal with three tabs — Orb (delegates to `ResizeControl`), Brain (LLM provider/model picker, backed by `/settings/llm-*`) and Voice (wake-word enrollment, speech-model download, listen toggle, TTS voice picker, backed by `/settings/voice-config` and the native voice commands). |
 | [`ResizeControl.jsx`](../desktop/src/components/ResizeControl.jsx) | Orb size slider + corner picker, used inside the Settings panel's Orb tab. |
+| [`CommandApproval.jsx`](../desktop/src/components/CommandApproval.jsx) | One approval card per pending command — readable text for every action type (`open_app`/`close_app`/file ops, `app_action`, `click_menu_item`) plus Approve/Deny. |
+| [`WhitelistSettings.jsx`](../desktop/src/components/WhitelistSettings.jsx) | Per-action auto-approve rules for the four fixed actions, plus a dynamic per-app section (fed by `GET /handlers`) for `app_action`. |
+| [`RunningApps.jsx`](../desktop/src/components/RunningApps.jsx) | ▤ header button + dropdown listing currently running apps (`GET /running-apps`), fetched fresh on each open. |
 
 ### `desktop/src-tauri/` — the native Rust shell
 
@@ -112,7 +115,20 @@ Referenced from the `bundle.icon` list in `tauri.conf.json`.
 | [`brain.py`](../sidecar/brain.py) | Turns user text into `(reply, commands)` — dispatches to a configured LLM provider or the regex stub. |
 | [`db.py`](../sidecar/db.py) | SQLite layer: connection/migration, and read/write functions for the `turns`, `command_attempts`, and `settings` tables. |
 | [`llm_providers.py`](../sidecar/llm_providers.py) | Claude and Ollama backends, plus hardware/availability probing (`probe_ollama`, `claude_api_key_configured`) for the Settings UI. |
+| [`executor.py`](../sidecar/executor.py) | Rigel's execution layer — `preview()`/`is_whitelisted()`/`execute()` for all six actions (`open_app`, `close_app`, `create_file`, `delete_file`, `app_action`, `click_menu_item`), macOS-only. |
 | [`requirements.txt`](../sidecar/requirements.txt) | Pinned minimum versions for `fastapi`, `uvicorn`, `anthropic`, `psutil` — installed into `.venv` per the README's Quick Start. |
+
+### `sidecar/handlers/` — per-app handlers and dynamic menu actions
+
+| File | Purpose |
+|------|---------|
+| [`__init__.py`](../sidecar/handlers/__init__.py) | Imports every concrete handler module so importing this package registers all of them with `registry.py`. |
+| [`base.py`](../sidecar/handlers/base.py) | The `AppHandler` interface every per-app handler subclasses: `app_id`, `system_prompt`, a Claude tool-use `tools` schema, and `execute_tool()`. |
+| [`registry.py`](../sidecar/handlers/registry.py) | Where handlers register themselves; `match(text)` finds the handler (if any) whose keywords appear in a message. |
+| [`window_ops.py`](../sidecar/handlers/window_ops.py) | Shared AppleScript `focus()`/`minimize()`/`is_running()` helpers, reused by multiple handlers instead of each reimplementing them. |
+| [`chrome.py`](../sidecar/handlers/chrome.py) | `ChromeHandler` — new_tab, close_tab, list_tabs, new_window, focus, minimize, via Chrome's own AppleScript dictionary. |
+| [`vscode.py`](../sidecar/handlers/vscode.py) | `VSCodeHandler` — open_file, open_folder, new_window, focus, minimize, via the `code` CLI. |
+| [`menu_actions.py`](../sidecar/handlers/menu_actions.py) | Dynamic app-menu discovery, fuzzy matching, and real click execution — `frontmost_app()`, `list_running_apps()`, `discover_menu()`, `fuzzy_match()`, `is_dangerous()`, `click_menu_item()`. Not an `AppHandler` — a generic fallback tier `brain.py` calls directly. |
 
 ## `docs/`
 
@@ -123,7 +139,8 @@ Referenced from the `bundle.icon` list in `tauri.conf.json`.
 | [`GLOSSARY.md`](GLOSSARY.md) | Vocabulary reference — product concepts, architecture components, data model, desktop/window terms. |
 | `FILE-REFERENCE.md` | This file. |
 | `TEMPLATE-*.md` (8 files) | Blank-slate templates for API endpoint, architecture, command-intent, component, database-schema, feature, setup-guide, and troubleshooting docs — copied and filled in per `docs/README.md`'s instructions, never edited in place. |
-| `api/`, `architecture/`, `features/`, `setup/`, `troubleshooting/` | Filled-in docs for shipped features (currently: the LLM brain, orb minimize/expand, the voice pipeline), organized by the same categories as the templates above. |
+| `api/`, `architecture/`, `features/`, `setup/`, `troubleshooting/` | Filled-in docs for shipped features (currently: the LLM brain, orb minimize/expand, the voice pipeline, App Handlers, App Menu Actions), organized by the same categories as the templates above. |
+| [`proposals/`](proposals) | Working design docs for in-progress features before/while they're built — a looser format than the filled-in categories above, meant to be updated as work lands rather than written once. `expanded-app-control.md` and `menu-actions.md` have the full slice-by-slice build history behind App Handlers/App Menu Actions. |
 
 ---
 

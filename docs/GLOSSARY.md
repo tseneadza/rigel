@@ -129,6 +129,47 @@ Here: the two separate channels Rigel's processes use to talk —
 Tauri↔React IPC inside the desktop shell (e.g. `@tauri-apps/api/window`
 calls), and HTTP between the desktop shell and the sidecar (`/api/rigel/*`).
 
+**AppHandler**
+A per-app "sub-agent" — a system prompt plus a Claude tool-use schema
+describing one app's own in-app vocabulary (e.g. Chrome's tabs/windows),
+dispatched by `sidecar/handlers/registry.py` when a user's text matches
+that app. Explicitly modeled on how Claude Code itself delegates a scoped
+task to a subagent rather than handling everything in one shared context.
+See [`docs/features/app-handlers.md`](features/app-handlers.md).
+
+**Handler registry**
+`sidecar/handlers/registry.py` — where every `AppHandler` (Chrome, VS
+Code, ...) registers itself at import time; `registry.match(text)` finds
+the handler (if any) whose keywords appear in a user's message.
+
+**`app_action`**
+The command type an `AppHandler` produces (`{"app_id", "tool",
+"tool_args"}`) — flows through the same preview → whitelist → execute →
+log pipeline as `open_app`/`close_app`/etc., just dispatched to that
+handler's own `execute_tool()` instead of `executor.py`'s built-in
+per-action logic.
+
+**App Menu Actions**
+The feature letting Rigel discover and click *any* running app's real
+menu-bar items dynamically (via macOS's Accessibility API), rather than
+needing a hand-written `AppHandler` per app. A generic fallback tier
+underneath the `AppHandler` framework, not another instance of it — an
+`AppHandler`'s tool list is fixed at class-definition time, which doesn't
+fit a live-discovered, app-state-dependent menu. See
+[`docs/features/menu-actions.md`](features/menu-actions.md).
+
+**Menu path**
+A discovered menu item's full location, as a list of strings — e.g.
+`["File", "New Window"]` or `["Apple", "Recent Items", "Applications"]` —
+returned by `menu_actions.discover_menu()` and carried through fuzzy
+matching, approval, and `click_menu_item` execution as one unit.
+
+**`click_menu_item`**
+The command type App Menu Actions produces on a confident fuzzy match
+(`{"app", "menu_path"}`) — the one action in Rigel's whitelist system
+where `menu_actions.is_dangerous()` can force approval even when the
+user's whitelist for that app says `all: true`.
+
 ---
 
 ## Data Model

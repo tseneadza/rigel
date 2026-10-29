@@ -22,6 +22,23 @@ Two-step contract, matched by ``app.py``:
                                  instead of waiting for approval when this
                                  returns True.
 
+Six actions share that contract: the original four (``open_app``,
+``close_app``, ``create_file``, ``delete_file``), ``app_action`` — a
+per-app command produced by one of the handlers in ``sidecar/handlers/``
+(``{"app_id": ..., "tool": ..., "tool_args": {...}}``) — and
+``click_menu_item`` — a dynamic app-menu click (Slice 4 of App Menu
+Actions, ``docs/proposals/menu-actions.md``) produced by ``brain.py``'s
+own fuzzy-match fallback rather than any handler
+(``{"app": ..., "menu_path": [...]}}``). Where the first four run through
+``_execute_macos`` directly, ``app_action``/``click_menu_item`` dispatch to
+``sidecar/handlers/``: the matched handler's own ``execute_tool`` for the
+former, ``menu_actions.click_menu_item`` for the latter. This module still
+owns validating the args (in ``preview``) and the whitelist/execute
+plumbing around both, same as any other action —
+``click_menu_item``'s whitelist check additionally consults
+``menu_actions.is_dangerous()`` first, and forces approval regardless of
+whitelist state when it matches (see ``is_whitelisted``).
+
 macOS only for now — other platforms raise ``NotImplementedError``, which
 ``execute`` turns into an ordinary ``"error"`` status rather than a crash.
 """
@@ -30,6 +47,8 @@ from __future__ import annotations
 import subprocess
 import sys
 from pathlib import Path
+
+from sidecar.handlers import menu_actions, registry
 
 # Sandbox root for relative create/delete targets, and the only tree an
 # absolute target is allowed to resolve inside.
@@ -81,6 +100,36 @@ def preview(action: str, args: dict) -> dict:
                 raise UnsafeCommandError(f"'{resolved}' is a directory — refused.")
         return {"path": str(resolved)}
 
+    if action == "app_action":
+        app_id = str(args.get("app_id", "")).strip()
+        tool = str(args.get("tool", "")).strip()
+        if not app_id or not tool:
+            raise UnsafeCommandError("app_action missing app_id/tool.")
+        handler = registry.get(app_id)
+        if handler is None:
+            raise UnsafeCommandError(f"no handler registered for app '{app_id}'.")
+        if tool not in {t["name"] for t in handler.tools}:
+            raise UnsafeCommandError(f"'{tool}' is not a recognized action for {handler.display_name}.")
+        tool_args = args.get("tool_args")
+        return {"app_id": app_id, "tool": tool, "tool_args": tool_args if isinstance(tool_args, dict) else {}}
+
+    if action == "click_menu_item":
+        app = str(args.get("app", "")).strip()
+        menu_path = args.get("menu_path")
+        if not app:
+            raise UnsafeCommandError("no app name given.")
+        if not isinstance(menu_path, list) or not menu_path or not all(
+            isinstance(segment, str) and segment.strip() for segment in menu_path
+        ):
+            raise UnsafeCommandError("menu_path must be a non-empty list of menu item names.")
+        # No further resolution needed, unlike app_action's tool-name check
+        # against a handler's declared tools — menu_path was already
+        # validated against a live discover_menu() walk when brain.py
+        # built it (see docs/proposals/menu-actions.md's Slice 4 section
+        # for why re-verifying here isn't worth it: a stale path surfaces
+        # as an ordinary execution error either way).
+        return {"app": app, "menu_path": [segment.strip() for segment in menu_path]}
+
     raise UnsafeCommandError(f"unknown action '{action}'.")
 
 
@@ -91,7 +140,43 @@ def is_whitelisted(action: str, resolved_args: dict, whitelist: dict | None) -> 
     ``"all"`` matches any target for that action; otherwise the target
     (an app name for open/close, a resolved absolute path for file actions)
     must exactly match one of ``"targets"``, case-insensitively.
+
+    ``app_action`` is keyed differently — per app, not per global action —
+    since "auto-approve Chrome's new-tab" shouldn't also auto-approve VS
+    Code opening arbitrary folders. Its shape is
+    ``whitelist["app_action"] = {app_id: {"all": bool, "tools": [str, ...]}}``.
+
+    ``click_menu_item`` is keyed the same way, per app
+    (``whitelist["click_menu_item"] = {app: {"all": bool, "menu_paths":
+    [[str, ...], ...]}}``), but with one override no other action has:
+    ``menu_actions.is_dangerous(menu_path)`` is checked *first*, and a
+    match returns ``False`` unconditionally — a dangerous-sounding item
+    (delete, quit, empty trash, ...) always requires approval, even with
+    ``all: true`` set for that app. Nothing else in this whitelist can be
+    overridden this way; menu actions are the one case where discovering
+    an item's real label at runtime means the whitelist can't have vetted
+    it in advance the way a fixed action/tool name can be.
     """
+    if action == "click_menu_item":
+        menu_path = resolved_args.get("menu_path") or []
+        if menu_actions.is_dangerous(menu_path):
+            return False
+        app = str(resolved_args.get("app") or "")
+        entry = ((whitelist or {}).get("click_menu_item") or {}).get(app) or {}
+        if entry.get("all"):
+            return True
+        whitelisted_paths = entry.get("menu_paths") or []
+        return list(menu_path) in [list(p) for p in whitelisted_paths]
+
+    if action == "app_action":
+        app_id = str(resolved_args.get("app_id") or "")
+        tool = str(resolved_args.get("tool") or "")
+        entry = ((whitelist or {}).get("app_action") or {}).get(app_id) or {}
+        if entry.get("all"):
+            return True
+        tools = entry.get("tools") or []
+        return tool in set(tools)
+
     entry = (whitelist or {}).get(action) or {}
     if entry.get("all"):
         return True
@@ -132,6 +217,15 @@ def _execute_macos(action: str, args: dict) -> tuple[str, str]:
         except OSError as e:
             return ("error", str(e))
         return ("ok", f"Deleted {path}.")
+
+    if action == "app_action":
+        handler = registry.get(args["app_id"])
+        if handler is None:
+            return ("error", f"no handler registered for app '{args['app_id']}'.")
+        return handler.execute_tool(args["tool"], args.get("tool_args") or {})
+
+    if action == "click_menu_item":
+        return menu_actions.click_menu_item(args["app"], args["menu_path"])
 
     return ("error", f"unknown action '{action}'.")
 

@@ -14,6 +14,11 @@ Endpoints (all under /api/rigel):
                     executes it.
     GET  /state   — current orb state ('idle' | 'thinking' | 'speaking').
     GET  /logs    — recent conversation turns + command attempts.
+    GET  /handlers — registered app handlers (sidecar/handlers/) and the
+                    tools each exposes, for the whitelist UI.
+    GET  /running-apps — every foreground app currently running, for the
+                    orb window's open-apps list. macOS only; 503 elsewhere
+                    or if Accessibility/System Events can't be reached.
     GET  /health  — liveness.
     GET  /settings/orb-config  — persisted orb sizes (expanded/minimized) and
                                   minimized-orb position (or defaults).
@@ -41,6 +46,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from sidecar import brain, db, executor, llm_providers
+from sidecar.handlers import menu_actions, registry
 
 RIGEL_PORT = int(os.getenv("RIGEL_PORT", "5140"))
 
@@ -90,11 +96,26 @@ class ActionWhitelist(BaseModel):
     targets: list[str] = []    # auto-approve only these specific targets
 
 
+class AppActionWhitelist(BaseModel):
+    all: bool = False          # auto-approve every tool this app handler exposes
+    tools: list[str] = []      # auto-approve only these specific tool names
+
+
+class MenuActionWhitelist(BaseModel):
+    all: bool = False                  # auto-approve every menu click for this app
+    menu_paths: list[list[str]] = []   # auto-approve only these specific menu paths
+    # Note: executor.is_whitelisted() still forces approval for a
+    # dangerous-sounding item (menu_actions.is_dangerous()) regardless of
+    # either field here — see executor.py's is_whitelisted docstring.
+
+
 class WhitelistConfig(BaseModel):
     open_app: ActionWhitelist = ActionWhitelist()
     close_app: ActionWhitelist = ActionWhitelist()
     create_file: ActionWhitelist = ActionWhitelist()
     delete_file: ActionWhitelist = ActionWhitelist()
+    app_action: dict[str, AppActionWhitelist] = {}       # keyed by app_id
+    click_menu_item: dict[str, MenuActionWhitelist] = {}  # keyed by app process name
 
 
 @app.get("/api/rigel/health")
@@ -291,6 +312,32 @@ def get_voice_config() -> dict:
 def save_voice_config(body: VoiceConfig) -> dict:
     db.set_setting("voice_config", body.model_dump())
     return {"ok": True}
+
+
+@app.get("/api/rigel/handlers")
+def list_handlers() -> dict:
+    """Registered app handlers and the tools each exposes, for the
+    Settings UI's per-app whitelist section — it has no other way to know
+    what handlers ``sidecar/handlers/`` currently registers."""
+    return {
+        "handlers": [
+            {
+                "app_id": h.app_id,
+                "display_name": h.display_name,
+                "tools": [{"name": t["name"], "description": t.get("description", "")} for t in h.tools],
+            }
+            for h in registry.all_handlers()
+        ]
+    }
+
+
+@app.get("/api/rigel/running-apps")
+def running_apps() -> dict:
+    try:
+        apps = menu_actions.list_running_apps()
+    except menu_actions.MenuDiscoveryError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    return {"apps": apps}
 
 
 @app.get("/api/rigel/settings/whitelist-config")

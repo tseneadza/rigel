@@ -28,12 +28,24 @@ The **Brain** tab lets you choose:
   run slowly / ❌ not recommended), based on your detected system RAM.
 
 Whichever provider is selected, chat behaves the same from the user's
-perspective — command intents are still only detected and logged, never
-executed (that's a separate, still-deferred slice).
+perspective — command intents are detected the same way regardless of
+provider. (At the time this feature shipped, detected commands were only
+logged, never executed; real, approval-gated execution landed afterward —
+see [`docs/features/app-handlers.md`](app-handlers.md) and
+[`docs/features/menu-actions.md`](menu-actions.md) — and now runs
+identically no matter which provider detected the command.)
 
 ## Technical Implementation
 
 ### Architecture
+This diagram covers only the provider-selection seam this feature added.
+`brain.respond()` has since grown three more layers around it (a pure-read
+"what apps are open" intercept before the provider call, per-app handler
+routing and a menu-action fallback after it) — see
+[`docs/features/app-handlers.md`](app-handlers.md) and
+[`docs/features/menu-actions.md`](menu-actions.md) for those. This feature
+is only about which brain answers a chat turn, not everything `respond()`
+now does around that answer.
 ```
 Settings (Brain tab) ──save──▶ POST /settings/llm-config ──▶ settings table
 Settings (Brain tab) ◀─probe── GET  /settings/llm-options ──▶ live Claude/Ollama probe
@@ -96,9 +108,14 @@ for why these are read this way.
 ### User Perspective
 ```
 User prompt: "Hey Rigel, please open Chrome"
-Rigel response (Ollama, llama3.2): "I can help you with that, but command
-execution is not wired up yet, so I've logged the intent instead."
+Rigel response (Ollama, llama3.2): "Understood. I've logged that and I'm
+waiting on your approval to open app — check the console. What's next?"
 ```
+(This example predates real command execution — the reply text above
+matches `llm_providers.py`'s current `SYSTEM_PROMPT`, which now instructs
+every provider to say it's waiting on approval, not that execution "isn't
+wired up yet." See [`docs/features/app-handlers.md`](app-handlers.md)/
+[`menu-actions.md`](menu-actions.md) for what actually runs once approved.)
 
 ### Developer Perspective
 ```python
@@ -148,8 +165,12 @@ reply, commands = brain.respond("open Chrome and Safari", llm_config)
 - Streaming replies for lower perceived latency.
 
 ## Related Features
-- Depends on the still-deferred **real command execution** slice (README
-  "Deferred to later slices") — commands remain detected-and-logged only.
+- Real, approval-gated command execution (`sidecar/executor.py`) now runs
+  every detected command — regardless of which brain here detected it —
+  including per-app handler actions and dynamic menu clicks added since
+  this feature shipped. See
+  [`docs/features/app-handlers.md`](app-handlers.md) and
+  [`docs/features/menu-actions.md`](menu-actions.md).
 
 ## References
 - [`docs/architecture/llm-provider-selection.md`](../architecture/llm-provider-selection.md)
