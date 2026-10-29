@@ -62,7 +62,10 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 # ("close the Chrome app", "quit Chrome now", "terminate Slack please") drags
 # filler words into the target and breaks the exact-name match `executor.py`
 # needs (`open -a "the Chrome app"` won't resolve). Strip it off the capture.
+# %%
 _LEADING_FILLER = re.compile(r"^(?:the|a|an|my|out of)\s+", re.I)
+# %%
+
 _TRAILING_FILLER = re.compile(r"(?:\s+(?:app|application|now|please|for me))+$", re.I)
 
 # Matches "what apps are open", "which applications are running", "what's
@@ -89,7 +92,7 @@ _MENU_ACTION_VERB_HINT = re.compile(
     re.I,
 )
 
-
+# %%
 def _clean_target(raw: str) -> str:
     target = raw.strip(" .!?\"'")
     target = _TRAILING_FILLER.sub("", target)
@@ -97,6 +100,7 @@ def _clean_target(raw: str) -> str:
     return target.strip(" .!?\"'")
 
 
+# %%
 def detect_commands(text: str) -> list[dict]:
     """Return command intents found in ``text`` as ``{action, args}`` dicts."""
     commands: list[dict] = []
@@ -277,3 +281,5 @@ def _menu_action_commands(text: str) -> tuple[list[dict], str | None]:
         f"not sure which, so I didn't guess.)"
     )
     return [], note
+
+# %%
