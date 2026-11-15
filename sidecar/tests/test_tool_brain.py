@@ -226,3 +226,10 @@ def test_claimed_action_without_a_call_is_replaced():
     out = tool_brain._sanitize_reply("I've called osa-system.fs.delete with the path. Please approve.", [], [])
     assert "didn't actually run it" in out
     assert tool_brain._sanitize_reply("I couldn't find a tool for that.", [], []) == "I couldn't find a tool for that."
+
+
+def test_error_detail_reads_json_error():
+    """Regression (live, Claude): a declined osa-system call showed detail '{'."""
+    body = '{\n  "error": "\'fs.delete\' was not approved by the user",\n  "declined": true\n}'
+    assert tool_brain._error_detail(body) == "'fs.delete' was not approved by the user"
+    assert tool_brain._error_detail("plain failure\nmore") == "plain failure"

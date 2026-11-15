@@ -327,9 +327,11 @@ export default function SettingsPanel({ open, onClose, orbConfig, onOrbConfigCha
                     </select>
                   </div>
                   <p className={`settings-hint ${claude.api_key_configured ? "ok" : "warn"}`}>
-                    {claude.api_key_configured
-                      ? "✅ ANTHROPIC_API_KEY is configured."
-                      : "⚠ ANTHROPIC_API_KEY is not set. Export it in the environment Rigel's sidecar runs in, then restart the sidecar."}
+                    {claude.api_key_source === "keychain"
+                      ? "✅ API key found in the Keychain (rigel-anthropic-key)."
+                      : claude.api_key_configured
+                      ? "✅ ANTHROPIC_API_KEY is set in the sidecar's environment."
+                      : "⚠ No API key. Save one in the Keychain as 'rigel-anthropic-key' (see sidecar/keychain.py), or set ANTHROPIC_API_KEY."}
                   </p>
                 </div>
               )}

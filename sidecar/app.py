@@ -411,6 +411,7 @@ def get_llm_options(ollama_host: str = llm_providers.DEFAULT_OLLAMA_HOST) -> dic
         "claude": {
             "models": llm_providers.CLAUDE_MODELS,
             "api_key_configured": llm_providers.claude_api_key_configured(),
+            "api_key_source": llm_providers.claude_api_key_source(),
         },
         "ollama": llm_providers.probe_ollama(ollama_host),
     }

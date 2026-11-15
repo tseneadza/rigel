@@ -162,10 +162,22 @@ class _Runner:
             self.steps.append(ToolStep(
                 kind="call", tool=tool, arguments=arguments, status=status,
                 ms=round((time.monotonic() - started) * 1000),
-                detail=_first_line(text) if is_error else "", approval=approval,
+                detail=_error_detail(text) if is_error else "", approval=approval,
             ))
             return text, is_error
         return f"Unknown tool {name!r}. Use toolbox_need, toolbox_call or respond.", True
+
+
+def _error_detail(text: str) -> str:
+    """Short error for the step chip. osa-system answers with a JSON body
+    ({"error": "...", "declined": true}); its first line is just "{"."""
+    try:
+        data = json.loads(text)
+        if isinstance(data, dict) and data.get("error"):
+            return str(data["error"])[:160]
+    except (ValueError, TypeError):
+        pass
+    return _first_line(text)
 
 
 def _first_line(text: str, n: int = 160) -> str:
@@ -246,7 +258,7 @@ def _need_summary(text: str) -> str:
 def _claude_loop(text: str, model: str, runner: _Runner, max_steps: int) -> tuple[str, list[dict]]:
     if model not in llm_providers.CLAUDE_MODELS:
         raise llm_providers.LLMError(f"unknown Claude model: {model!r}")
-    client = anthropic.Anthropic()
+    client = llm_providers.anthropic_client()
     messages: list[dict] = [{"role": "user", "content": text}]
     system = llm_providers.SYSTEM_PROMPT + TOOLBOX_SYSTEM
     used = 0

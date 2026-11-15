@@ -101,6 +101,16 @@ RESPONSE_SCHEMA = {
 }
 
 
+def anthropic_client() -> "anthropic.Anthropic":
+    """Anthropic client using the key from the macOS Keychain (see
+    ``keychain.py``); falls back to the SDK's own env lookup when there's
+    no Keychain entry."""
+    from sidecar import keychain
+
+    key = keychain.anthropic_key()
+    return anthropic.Anthropic(api_key=key) if key else anthropic.Anthropic()
+
+
 class LLMError(Exception):
     """Raised when a provider can't produce a (reply, commands) pair."""
 
@@ -145,7 +155,7 @@ def claude_respond(text: str, model: str, extra_system: str = "") -> tuple[str, 
         raise LLMError(f"unknown Claude model: {model!r}")
 
     try:
-        client = anthropic.Anthropic()
+        client = anthropic_client()
         response = client.messages.create(
             model=model,
             max_tokens=1024,
@@ -186,7 +196,7 @@ def claude_app_action(text: str, model: str, handler: AppHandler) -> list[dict]:
         raise LLMError(f"unknown Claude model: {model!r}")
 
     try:
-        client = anthropic.Anthropic()
+        client = anthropic_client()
         response = client.messages.create(
             model=model,
             max_tokens=512,
@@ -222,7 +232,7 @@ def claude_json(prompt: str, model: str, schema: dict) -> str:
     if model not in CLAUDE_MODELS:
         raise LLMError(f"unknown Claude model: {model!r}")
     try:
-        response = anthropic.Anthropic().messages.create(
+        response = anthropic_client().messages.create(
             model=model,
             max_tokens=200,
             messages=[{"role": "user", "content": prompt}],
@@ -299,7 +309,14 @@ def system_ram_gb() -> float:
 
 
 def claude_api_key_configured() -> bool:
-    return bool(os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"))
+    return claude_api_key_source() is not None
+
+
+def claude_api_key_source() -> str | None:
+    """'keychain', 'env' or None — never the key."""
+    from sidecar import keychain
+
+    return keychain.anthropic_key_source()
 
 
 def _fit_label(model_gb: float, ram_gb: float) -> str:

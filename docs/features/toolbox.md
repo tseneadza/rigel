@@ -18,8 +18,8 @@ Mockup: [`docs/mockups/toolbox-connect-v1.html`](../mockups/toolbox-connect-v1.h
 ## Status
 - [ ] Planned
 - [ ] In Development
-- [x] Alpha/Beta: built and verified on the real path (Ollama); Claude and
-      spoken approvals not yet verified live (see "Verified" below)
+- [x] Alpha/Beta: built and verified on the real path (Claude and Ollama);
+      spoken approvals in the native app not yet verified live (see "Verified")
 - [ ] Production
 
 ## Decisions (Tony, 2026-11-15)
@@ -118,10 +118,28 @@ Approval: server elicitation ─▶ ToolBox ─▶ toolbox_client._on_elicit
 - 58 sidecar tests (`./.venv/bin/python -m pytest -q sidecar/tests`); Vite
   build and `cargo check` clean.
 
-**Not yet verified live:** the Claude brain (no `ANTHROPIC_API_KEY` in the
-sidecar's environment) and the spoken yes/no in the native app (needs a
+- Claude (`claude-sonnet-5`, key from the Keychain, env key unset):
+  battery answered via `need` + `call`; gated delete with an unclear answer
+  → follow-up → "yeah go ahead" approved by voice (file deleted); "no, leave
+  it" / "nope" declined by voice (file kept, honest reply).
+
+**Not yet verified live:** the spoken yes/no in the native app (needs a
 person at the mic). Small Ollama models are unreliable at calls that need
 arguments; Claude is the recommended brain for ToolBox.
+
+## API key (Claude)
+The sidecar reads the Anthropic API key from the macOS Keychain, service
+`rigel-anthropic-key` (`sidecar/keychain.py`; override the service name with
+`RIGEL_KEYCHAIN_SERVICE`), falling back to `ANTHROPIC_API_KEY` in the
+environment. The key goes straight to the Anthropic client and is never
+logged, returned or shown; Settings → Brain → Claude says only where it came
+from. Stored 2026-11-15 from Tony's shared Codehome key. To rotate it
+without the key appearing on screen or in `ps`:
+
+```sh
+k=$(pbpaste); printf 'add-generic-password -U -s rigel-anthropic-key -a "$USER" -w "%s"\n' "$k" | security -i; unset k
+```
+Then restart the sidecar (the key is cached after the first read).
 
 ## Troubleshooting
 - **Badge says "ToolBox offline"** → `toolbox status`; ToolBox runs as the

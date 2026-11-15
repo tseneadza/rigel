@@ -110,8 +110,10 @@ The orb appears on launch. Type to Rigel; every turn and every detected command 
 By default Rigel replies with a simple pattern-matching stub — no setup
 required. To have it reply through a real LLM instead, open Settings (⚙,
 top-right) → **Brain** tab and pick:
-* **Claude** — set `export ANTHROPIC_API_KEY=sk-ant-...` in the shell you
-  launch the sidecar from, then pick a model in Settings.
+* **Claude** — on macOS, save your key in the Keychain as `rigel-anthropic-key`
+  (see `sidecar/keychain.py` for a one-liner that keeps it off screen); or set
+  `export ANTHROPIC_API_KEY=sk-ant-...` in the shell you launch the sidecar
+  from. Then pick a model in Settings.
 * **Ollama (local)** — [install Ollama](https://ollama.com), pull a model
   (`ollama pull llama3.2:3b`), then pick it in Settings — it's live-probed
   against your machine's actual RAM so you can see which models will
