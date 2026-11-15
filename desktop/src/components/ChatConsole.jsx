@@ -7,6 +7,8 @@
 import { useEffect, useRef, useState } from "react";
 import { sendChat } from "../api.js";
 import CommandApproval from "./CommandApproval.jsx";
+import ToolBoxApproval from "./ToolBoxApproval.jsx";
+import ToolSteps from "./ToolSteps.jsx";
 
 export default function ChatConsole({
   turns,
@@ -15,6 +17,9 @@ export default function ChatConsole({
   hidden = false,
   pendingCommands = [],
   onCommandResolved,
+  toolboxApprovals = [],
+  approvalListening = false,
+  onApprovalAnswered,
 }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -59,13 +64,29 @@ export default function ChatConsole({
           <p className="transcript-hint">Speak to Rigel by typing below. Try "open VS Code".</p>
         ) : (
           turns.map((t, i) => (
-            <div key={i} className={`line line--${t.role}`}>
-              <span className="line-who">{t.role === "user" ? "You" : "Rigel"}</span>
-              <span className="line-text">{t.text}</span>
+            <div key={i} className="turn">
+              {t.role === "rigel" && <ToolSteps steps={t.tool_steps} />}
+              {t.role === "rigel" && t.toolbox_offline && (
+                <div className="tool-steps">
+                  <span className="tool-chip">
+                    <span className="tool-dot tool-dot--error" />
+                    ToolBox unreachable · answered without tools
+                  </span>
+                </div>
+              )}
+              <div className={`line line--${t.role}`}>
+                <span className="line-who">{t.role === "user" ? "You" : "Rigel"}</span>
+                <span className="line-text">{t.text}</span>
+              </div>
             </div>
           ))
         )}
       </div>
+      <ToolBoxApproval
+        approvals={toolboxApprovals}
+        listening={approvalListening}
+        onAnswered={onApprovalAnswered}
+      />
       <CommandApproval commands={pendingCommands} onResolved={onCommandResolved} />
       <form className="composer" onSubmit={submit}>
         <input

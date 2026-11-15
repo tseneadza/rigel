@@ -3,7 +3,16 @@ import RigelOrb from "./components/RigelOrb.jsx";
 import ChatConsole from "./components/ChatConsole.jsx";
 import SettingsPanel from "./components/SettingsPanel.jsx";
 import RunningApps from "./components/RunningApps.jsx";
-import { getLogs, getOrbConfig, saveOrbConfig, getVoiceConfig, sendChat } from "./api.js";
+import {
+  getLogs,
+  getOrbConfig,
+  saveOrbConfig,
+  getVoiceConfig,
+  sendChat,
+  getToolboxApprovals,
+  getToolboxStatus,
+  interpretToolboxApproval,
+} from "./api.js";
 import {
   restoreRestingBounds,
   shrinkToCorner,
@@ -20,7 +29,13 @@ import {
   onVoiceError,
   subscribeInEffect,
   looksLikeSpeech,
+  listenOnce,
 } from "./voice.js";
+
+// How often to check for ToolBox approvals while a reply is in flight, and
+// how often to refresh the ToolBox badge otherwise.
+const APPROVAL_POLL_MS = 600;
+const TOOLBOX_STATUS_POLL_MS = 20000;
 
 // Fallback only — used before orbConfig has loaded from the sidecar; the
 // real minimized size comes from orbConfig.min_diameter_px (Settings → Orb).
@@ -53,11 +68,21 @@ export default function App() {
   const voiceBusyRef = useRef(false);
   const isBusy = () => typedBusyRef.current || voiceBusyRef.current;
 
+  // ToolBox: approvals a server is waiting on (only possible while a /chat
+  // is in flight), whether Rigel is listening for a spoken answer, and the
+  // header badge.
+  const [chatsInFlight, setChatsInFlight] = useState(0);
+  const [toolboxApprovals, setToolboxApprovals] = useState([]);
+  const approvalsRef = useRef([]);
+  const announcedApprovalsRef = useRef(new Set());
+  const [approvalListening, setApprovalListening] = useState(false);
+  const [toolboxStatus, setToolboxStatus] = useState(null);
+
   // Rehydrate the transcript and orb config on launch.
   useEffect(() => {
     Promise.all([getLogs(50), getOrbConfig()])
       .then(([logsData, configData]) => {
-        setTurns(logsData.turns.map((t) => ({ role: t.role, text: t.text })));
+        setTurns(logsData.turns.map((t) => ({ role: t.role, text: t.text, tool_steps: t.tool_steps })));
         setOrbConfig(configData);
         setOnline(true);
       })
@@ -97,8 +122,15 @@ export default function App() {
           setOrbState("idle");
           return;
         }
+        // A ToolBox server is waiting on an answer: this utterance is the
+        // answer, not a new request (with or without the wake word).
+        if (approvalsRef.current.length > 0) {
+          await answerApprovalByVoice(approvalsRef.current[0], text);
+          return;
+        }
         voiceBusyRef.current = true;
         setOrbState("thinking");
+        setChatsInFlight((n) => n + 1);
         try {
           const res = await sendChat(text);
           handleExchange(text, res, "voice");
@@ -106,6 +138,7 @@ export default function App() {
           handleExchange(text, { reply: `⚠ Rigel is offline (${err.message}).`, commands: [] }, "voice");
         } finally {
           voiceBusyRef.current = false;
+          setChatsInFlight((n) => n - 1);
         }
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -127,13 +160,112 @@ export default function App() {
     return installToggleHotkey(() => setManualMinimize((m) => !m));
   }, []);
 
+  // ── ToolBox approvals ───────────────────────────────────────────────
+  // Poll while a reply is in flight; that's the only time a ToolBox server
+  // can be waiting on an answer (the sidecar holds the /chat open).
+  useEffect(() => {
+    if (chatsInFlight <= 0) {
+      approvalsRef.current = [];
+      setToolboxApprovals([]);
+      setApprovalListening(false);
+      return;
+    }
+    let stopped = false;
+    const tick = () =>
+      getToolboxApprovals()
+        .then(({ approvals }) => {
+          if (stopped) return;
+          approvalsRef.current = approvals;
+          setToolboxApprovals(approvals);
+          if (approvals.length === 0) setApprovalListening(false);
+          for (const a of approvals) {
+            if (announcedApprovalsRef.current.has(a.id)) continue;
+            announcedApprovalsRef.current.add(a.id);
+            announceApproval(a);
+          }
+        })
+        .catch(() => {});
+    tick();
+    const timer = setInterval(tick, APPROVAL_POLL_MS);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatsInFlight > 0]);
+
+  // Say what needs approving, then listen once without the wake word.
+  // Only when voice is on; otherwise the card alone asks.
+  async function askOutLoud(sentence) {
+    if (!voiceConfigRef.current.enabled) return;
+    try {
+      await speak(sentence, voiceConfigRef.current.tts_voice);
+      await listenOnce();
+      setApprovalListening(true);
+    } catch (err) {
+      console.error("Couldn't ask for approval out loud:", err);
+      setApprovalListening(false);
+    }
+  }
+
+  function announceApproval(a) {
+    askOutLoud(a.spoken);
+  }
+
+  async function answerApprovalByVoice(approval, text) {
+    setApprovalListening(false);
+    setOrbState("thinking");
+    try {
+      const r = await interpretToolboxApproval(approval.id, text, "voice");
+      if (r.decision === "unclear" && r.follow_up) {
+        await askOutLoud(r.follow_up);
+      } else if (r.decision === "approve" || r.decision === "decline") {
+        const left = approvalsRef.current.filter((a) => a.id !== approval.id);
+        approvalsRef.current = left;
+        setToolboxApprovals(left);
+      }
+    } catch (err) {
+      console.error("Couldn't send the spoken answer:", err);
+    }
+  }
+
+  function handleApprovalAnswered(updated) {
+    const left = approvalsRef.current.filter((a) => a.id !== updated.id);
+    approvalsRef.current = left;
+    setToolboxApprovals(left);
+    setApprovalListening(false);
+  }
+
+  // Header badge: is ToolBox reachable?
+  useEffect(() => {
+    let stopped = false;
+    const tick = () =>
+      getToolboxStatus()
+        .then((st) => !stopped && setToolboxStatus(st))
+        .catch(() => !stopped && setToolboxStatus(null));
+    tick();
+    const timer = setInterval(tick, TOOLBOX_STATUS_POLL_MS);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, []);
+
   function handleExchange(userMsg, res, source = "typed") {
     setTurns((prev) => [
       ...prev,
       { role: "user", text: userMsg },
-      { role: "rigel", text: res.reply },
+      {
+        role: "rigel",
+        text: res.reply,
+        tool_steps: res.tool_steps,
+        toolbox_offline: res.toolbox?.state === "offline",
+      },
     ]);
     setOnline(true);
+    if (res.toolbox?.state === "offline") {
+      setToolboxStatus((st) => ({ ...(st || {}), state: "offline" }));
+    }
     const pending = (res.commands || []).filter((c) => c.status === "pending");
     if (pending.length > 0) {
       setPendingCommands((prev) => [...prev, ...pending]);
@@ -213,7 +345,10 @@ export default function App() {
     const timer = setTimeout(() => setAutoMinimized(true), WORKING_MINIMIZE_DELAY_MS);
     return () => clearTimeout(timer);
   }, [isWorking]);
-  const minimized = autoMinimized || manualMinimize;
+  // A ToolBox approval needs the console (its card and buttons), so Rigel
+  // expands while one is waiting, even mid-reply or after ⌘⇧R.
+  const awaitingApproval = toolboxApprovals.length > 0;
+  const minimized = (autoMinimized || manualMinimize) && !awaitingApproval;
   // Settings → Orb's size slider now covers the expanded/resting ("maximum")
   // size; its minimized ("minimum") size is separate, defaulting to the
   // constant this used to be hardcoded to. The position picker (and dragging)
@@ -256,6 +391,17 @@ export default function App() {
           <span className="brand">RIGEL</span>
           <span className="brand-sub">Really Intelligent Graphical Execution Layer</span>
           <RunningApps />
+          {toolboxStatus && toolboxStatus.state !== "disabled" && (
+            <span
+              className={`tb-badge ${toolboxStatus.state === "connected" ? "" : "tb-badge--off"}`}
+              title={toolboxStatus.url || ""}
+            >
+              <span className="tb-badge-dot" />
+              {toolboxStatus.state === "connected"
+                ? `ToolBox · ${toolboxStatus.servers} servers`
+                : "ToolBox offline"}
+            </span>
+          )}
           <button
             className="settings-btn"
             onClick={() => setSettingsOpen(true)}
@@ -288,6 +434,7 @@ export default function App() {
           onExchange={handleExchange}
           onBusy={(b) => {
             typedBusyRef.current = b;
+            setChatsInFlight((n) => n + (b ? 1 : -1));
             // Don't yank the orb back to idle if a voice exchange or TTS
             // is still under way.
             if (b) setOrbState("thinking");
@@ -296,6 +443,9 @@ export default function App() {
           hidden={minimized}
           pendingCommands={pendingCommands}
           onCommandResolved={handleCommandResolved}
+          toolboxApprovals={toolboxApprovals}
+          approvalListening={approvalListening}
+          onApprovalAnswered={handleApprovalAnswered}
         />
       </footer>
 

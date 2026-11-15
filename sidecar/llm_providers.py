@@ -40,7 +40,7 @@ def _default_ollama_host() -> str:
         if bind_host in ("", "0.0.0.0", "::"):
             bind_host = "localhost"  # a bind address isn't a connectable client target
         return f"http://{bind_host}:{port}" if port else f"http://{bind_host}"
-    return "http://localhost:11434"
+    return "http://localhost:12434"
 
 
 DEFAULT_OLLAMA_HOST = _default_ollama_host()
@@ -140,7 +140,7 @@ def _parse_response_json(raw: str) -> tuple[str, list[dict]]:
 
 # ── Claude ───────────────────────────────────────────────────────────────
 
-def claude_respond(text: str, model: str) -> tuple[str, list[dict]]:
+def claude_respond(text: str, model: str, extra_system: str = "") -> tuple[str, list[dict]]:
     if model not in CLAUDE_MODELS:
         raise LLMError(f"unknown Claude model: {model!r}")
 
@@ -149,7 +149,7 @@ def claude_respond(text: str, model: str) -> tuple[str, list[dict]]:
         response = client.messages.create(
             model=model,
             max_tokens=1024,
-            system=SYSTEM_PROMPT,
+            system=SYSTEM_PROMPT + extra_system,
             messages=[{"role": "user", "content": text}],
             output_config={"format": {"type": "json_schema", "schema": RESPONSE_SCHEMA}},
         )
@@ -216,6 +216,23 @@ def claude_app_action(text: str, model: str, handler: AppHandler) -> list[dict]:
     return commands
 
 
+def claude_json(prompt: str, model: str, schema: dict) -> str:
+    """One structured-output Claude call; returns the raw JSON text. Used for
+    small classification jobs (approvals.interpret)."""
+    if model not in CLAUDE_MODELS:
+        raise LLMError(f"unknown Claude model: {model!r}")
+    try:
+        response = anthropic.Anthropic().messages.create(
+            model=model,
+            max_tokens=200,
+            messages=[{"role": "user", "content": prompt}],
+            output_config={"format": {"type": "json_schema", "schema": schema}},
+        )
+    except (anthropic.APIError, TypeError) as e:
+        raise LLMError(f"Claude call failed: {e}") from e
+    return next((b.text for b in response.content if b.type == "text"), "")
+
+
 # ── Ollama ───────────────────────────────────────────────────────────────
 
 def _ollama_request(host: str, path: str, body: dict | None, timeout: float) -> dict[str, Any]:
@@ -229,7 +246,8 @@ def _ollama_request(host: str, path: str, body: dict | None, timeout: float) -> 
         return json.loads(resp.read().decode("utf-8"))
 
 
-def ollama_respond(text: str, model: str, host: str = DEFAULT_OLLAMA_HOST) -> tuple[str, list[dict]]:
+def ollama_respond(text: str, model: str, host: str = DEFAULT_OLLAMA_HOST,
+                   extra_system: str = "") -> tuple[str, list[dict]]:
     schema_hint = (
         "Respond with ONLY a JSON object of the exact shape "
         '{"reply": "<string>", "commands": [{"action": '
@@ -242,7 +260,7 @@ def ollama_respond(text: str, model: str, host: str = DEFAULT_OLLAMA_HOST) -> tu
         "stream": False,
         "format": "json",
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT + " " + schema_hint},
+            {"role": "system", "content": SYSTEM_PROMPT + extra_system + " " + schema_hint},
             {"role": "user", "content": text},
         ],
     }
@@ -261,6 +279,17 @@ def ollama_respond(text: str, model: str, host: str = DEFAULT_OLLAMA_HOST) -> tu
 
     raw = (result.get("message") or {}).get("content", "")
     return _parse_response_json(raw)
+
+
+def ollama_json(prompt: str, model: str, host: str = DEFAULT_OLLAMA_HOST) -> str:
+    """One JSON-mode Ollama call; returns the raw JSON text."""
+    body = {"model": model, "stream": False, "format": "json",
+            "messages": [{"role": "user", "content": prompt}]}
+    try:
+        result = _ollama_request(host, "/api/chat", body, timeout=30.0)
+    except (urllib.error.URLError, TimeoutError) as e:
+        raise LLMError(f"Ollama unreachable at {host}: {e}") from e
+    return (result.get("message") or {}).get("content", "")
 
 
 # ── System / hardware probing ───────────────────────────────────────────

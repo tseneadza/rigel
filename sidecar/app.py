@@ -33,6 +33,18 @@ Endpoints (all under /api/rigel):
     POST /settings/whitelist-config — save auto-approve rules. A whitelisted
                                   command runs immediately in /chat instead
                                   of coming back 'pending'.
+    GET  /settings/toolbox-config — ToolBox tool use: enabled, url override,
+                                  max_steps (or defaults).
+    POST /settings/toolbox-config — save it.
+    GET  /toolbox/status          — is ToolBox reachable; servers/tool counts;
+                                  whether the selected brain can use tools.
+    GET  /toolbox/approvals       — approvals a ToolBox server is waiting on
+                                  (MCP elicitation), for the console card.
+                                  Polled while a /chat is in flight.
+    POST /toolbox/approvals/{id}/answer    — {decision: approve|decline, via}.
+    POST /toolbox/approvals/{id}/interpret — {text, via}: classify a spoken or
+                                  typed answer; applies it when clear, else
+                                  returns a follow_up question to ask.
 
 Forked in spirit from AgenticOS's sidecar; intentionally self-contained
 (SQLite, no MySQL, no AgenticOS imports).
@@ -45,7 +57,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from sidecar import brain, db, executor, llm_providers
+from sidecar import approvals, brain, db, executor, llm_providers, toolbox_client
 from sidecar.handlers import menu_actions, registry
 
 RIGEL_PORT = int(os.getenv("RIGEL_PORT", "5140"))
@@ -109,6 +121,22 @@ class MenuActionWhitelist(BaseModel):
     # either field here — see executor.py's is_whitelisted docstring.
 
 
+class ToolBoxConfig(BaseModel):
+    enabled: bool = True          # let the brain find and run ToolBox tools
+    url: str | None = None        # None = auto (~/.toolbox/service.json)
+    max_steps: int = 5            # need+call steps per reply (runaway guard)
+
+
+class ApprovalAnswer(BaseModel):
+    decision: str                 # 'approve' | 'decline'
+    via: str = "click"            # 'click' | 'voice' | 'typed'
+
+
+class ApprovalUtterance(BaseModel):
+    text: str
+    via: str = "voice"
+
+
 class WhitelistConfig(BaseModel):
     open_app: ActionWhitelist = ActionWhitelist()
     close_app: ActionWhitelist = ActionWhitelist()
@@ -135,7 +163,9 @@ def chat(body: ChatIn) -> dict:
 
     llm_config = db.get_setting("llm_config")
     whitelist = db.get_setting("whitelist_config")
-    reply, commands = brain.respond(body.text, llm_config)
+    toolbox_config = {**ToolBoxConfig().model_dump(), **(db.get_setting("toolbox_config") or {})}
+    result = brain.respond_with_tools(body.text, llm_config, toolbox_config)
+    reply, commands = result["reply"], result["commands"]
 
     logged = []
     for cmd in commands:
@@ -174,9 +204,15 @@ def chat(body: ChatIn) -> dict:
         icons = {"ok": "✅", "error": "⚠"}
         reply += " " + " ".join(f"{icons[c['status']]} {c['detail']}" for c in auto_run)
 
-    db.log_turn("rigel", reply)
+    reply_turn_id = db.log_turn("rigel", reply)
+    db.log_tool_steps(reply_turn_id, result["tool_steps"])
 
-    return {"reply": reply, "commands": logged}
+    return {
+        "reply": reply,
+        "commands": logged,
+        "tool_steps": result["tool_steps"],
+        "toolbox": result["toolbox"],
+    }
 
 
 def _pending_command_or_404(command_id: int) -> dict:
@@ -206,10 +242,90 @@ def reject_command(command_id: int) -> dict:
 
 @app.get("/api/rigel/logs")
 def logs(limit: int = 50) -> dict:
+    turns = db.recent_turns(limit)
+    steps = db.tool_steps_for_turns([t["id"] for t in turns if t["role"] == "rigel"])
+    for t in turns:
+        if t["id"] in steps:
+            t["tool_steps"] = steps[t["id"]]
     return {
-        "turns": db.recent_turns(limit),
+        "turns": turns,
         "commands": db.recent_commands(limit),
     }
+
+
+def _toolbox_config() -> dict:
+    return {**ToolBoxConfig().model_dump(), **(db.get_setting("toolbox_config") or {})}
+
+
+@app.get("/api/rigel/settings/toolbox-config")
+def get_toolbox_config() -> dict:
+    return _toolbox_config()
+
+
+@app.post("/api/rigel/settings/toolbox-config")
+def save_toolbox_config(body: ToolBoxConfig) -> dict:
+    if not (1 <= body.max_steps <= 15):
+        raise HTTPException(status_code=400, detail="max_steps must be 1–15")
+    if body.url is not None and body.url.strip() and not body.url.startswith(("http://127.0.0.1", "http://localhost", "http://toolbox")):
+        raise HTTPException(status_code=400, detail="url must be a local ToolBox address")
+    cfg = body.model_dump()
+    cfg["url"] = (cfg["url"] or "").strip() or None
+    db.set_setting("toolbox_config", cfg)
+    return {"ok": True}
+
+
+@app.get("/api/rigel/toolbox/status")
+def toolbox_status() -> dict:
+    from sidecar import tool_brain
+
+    st = toolbox_client.status(_toolbox_config())
+    llm = db.get_setting("llm_config") or {}
+    provider = llm.get("provider", "stub")
+    if provider == "claude":
+        st["brain"] = {"provider": "claude", "tools": True}
+    elif provider == "ollama":
+        model = llm.get("ollama_model")
+        st["brain"] = {
+            "provider": "ollama", "model": model,
+            "tools": bool(model) and tool_brain.ollama_supports_tools(
+                model, llm.get("ollama_host", llm_providers.DEFAULT_OLLAMA_HOST)),
+        }
+    else:
+        st["brain"] = {"provider": provider, "tools": False}
+    return st
+
+
+@app.get("/api/rigel/toolbox/approvals")
+def toolbox_approvals() -> dict:
+    return {"approvals": approvals.pending()}
+
+
+def _approval_or_404(approval_id: str) -> approvals.Approval:
+    a = approvals.get(approval_id)
+    if a is None:
+        raise HTTPException(status_code=404, detail="approval not found")
+    return a
+
+
+@app.post("/api/rigel/toolbox/approvals/{approval_id}/answer")
+def answer_approval(approval_id: str, body: ApprovalAnswer) -> dict:
+    if body.decision not in ("approve", "decline"):
+        raise HTTPException(status_code=400, detail="decision must be 'approve' or 'decline'")
+    if body.via not in ("click", "voice", "typed"):
+        raise HTTPException(status_code=400, detail="via must be click, voice or typed")
+    a = _approval_or_404(approval_id)
+    if not a.resolve(body.decision, body.via):
+        raise HTTPException(status_code=409, detail=f"approval is '{a.status}', not pending")
+    return a.public()
+
+
+@app.post("/api/rigel/toolbox/approvals/{approval_id}/interpret")
+def interpret_approval(approval_id: str, body: ApprovalUtterance) -> dict:
+    a = _approval_or_404(approval_id)
+    if a.status != "pending":
+        return {"decision": "closed", "status": a.status, "approval": a.public()}
+    via = body.via if body.via in ("voice", "typed") else "voice"
+    return approvals.interpret(a, body.text, db.get_setting("llm_config"), via=via)
 
 
 def _validate_orb_config(config: OrbConfig) -> tuple[bool, str]:

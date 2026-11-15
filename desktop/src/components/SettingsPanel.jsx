@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import ResizeControl from "./ResizeControl.jsx";
 import WhitelistSettings from "./WhitelistSettings.jsx";
+import ToolBoxSettings from "./ToolBoxSettings.jsx";
 import {
   getLlmConfig,
   saveLlmConfig,
@@ -409,6 +410,8 @@ export default function SettingsPanel({ open, onClose, orbConfig, onOrbConfigCha
                 {saveState === "saved" && <span className="settings-hint ok">Saved.</span>}
                 {saveState === "error" && <span className="settings-hint warn">Failed to save.</span>}
               </div>
+
+              <ToolBoxSettings open={open && tab === "brain"} />
             </div>
           )}
 

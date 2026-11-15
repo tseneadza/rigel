@@ -58,6 +58,16 @@ pub fn tts_blocks_listening() -> bool {
         .unwrap_or(false)
 }
 
+/// "Record the next utterance without waiting for the wake word" — set by
+/// `voice_listen_once` (a ToolBox approval wants a spoken yes/no), consumed
+/// by the listener the next time it's listening and not muted by TTS, so
+/// it's safe to set while Rigel is still speaking the question.
+static LISTEN_ONCE: AtomicBool = AtomicBool::new(false);
+
+pub fn take_listen_once() -> bool {
+    LISTEN_ONCE.swap(false, Ordering::SeqCst)
+}
+
 /// Holds the running listener thread's stop handle, if voice is enabled.
 #[derive(Default)]
 pub struct ListenerState(pub Mutex<Option<listener::ListenerHandle>>);
@@ -79,4 +89,14 @@ pub fn voice_set_enabled(app: AppHandle, state: State<ListenerState>, enabled: b
 #[tauri::command]
 pub fn voice_is_enabled(state: State<ListenerState>) -> bool {
     state.0.lock().map(|g| g.is_some()).unwrap_or(false)
+}
+
+#[tauri::command]
+pub fn voice_listen_once(state: State<ListenerState>) -> Result<(), String> {
+    let running = state.0.lock().map(|g| g.is_some()).unwrap_or(false);
+    if !running {
+        return Err("Voice listening is off. Turn it on in Settings → Voice.".to_string());
+    }
+    LISTEN_ONCE.store(true, Ordering::SeqCst);
+    Ok(())
 }

@@ -80,6 +80,26 @@ def _migrate(conn: sqlite3.Connection) -> None:
         );
 
         CREATE INDEX IF NOT EXISTS idx_settings_key ON settings(key);
+
+        -- Every ToolBox step the brain takes (need / call), tied to the
+        -- Rigel reply turn it served. Additive table: existing DBs gain it
+        -- on next launch, nothing else changes. arguments is a JSON blob;
+        -- full tool output is never stored (can hold mail, file contents).
+        CREATE TABLE IF NOT EXISTS tool_calls (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts        TEXT    NOT NULL,
+            turn_id   INTEGER,                  -- the rigel reply turn
+            kind      TEXT    NOT NULL,         -- 'need' | 'call'
+            tool      TEXT    NOT NULL,         -- server.tool, or the need() query
+            arguments TEXT    NOT NULL,         -- JSON blob
+            status    TEXT    NOT NULL,         -- 'ok' | 'error' | 'declined' | 'expired'
+            ms        INTEGER NOT NULL,
+            detail    TEXT,
+            approval  TEXT,                     -- JSON {status, answered_via} or NULL
+            FOREIGN KEY (turn_id) REFERENCES turns (id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_tool_calls_turn ON tool_calls(turn_id);
         """
     )
     conn.commit()
@@ -109,6 +129,25 @@ def log_command(action: str, args: dict, status: str, detail: str = "",
         )
         conn.commit()
         return int(cur.lastrowid)
+
+
+def log_tool_steps(turn_id: int, steps: list[dict]) -> None:
+    if not steps:
+        return
+    conn = connect()
+    now = _now()
+    with _LOCK:
+        conn.executemany(
+            "INSERT INTO tool_calls (ts, turn_id, kind, tool, arguments, status, ms, detail, approval) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (now, turn_id, st["kind"], st["tool"], json.dumps(st.get("arguments") or {}),
+                 st["status"], int(st.get("ms") or 0), st.get("detail") or "",
+                 json.dumps(st["approval"]) if st.get("approval") else None)
+                for st in steps
+            ],
+        )
+        conn.commit()
 
 
 # ── reads ──────────────────────────────────────────────────────────────────
@@ -179,3 +218,22 @@ def set_setting(key: str, value: dict) -> str:
         )
         conn.commit()
     return now
+
+
+def tool_steps_for_turns(turn_ids: list[int]) -> dict[int, list[dict]]:
+    """ToolBox steps grouped by the reply turn they served (for rehydration)."""
+    if not turn_ids:
+        return {}
+    conn = connect()
+    marks = ",".join("?" * len(turn_ids))
+    rows = conn.execute(
+        f"SELECT turn_id, kind, tool, arguments, status, ms, detail, approval "
+        f"FROM tool_calls WHERE turn_id IN ({marks}) ORDER BY id", turn_ids
+    ).fetchall()
+    out: dict[int, list[dict]] = {}
+    for r in rows:
+        d = dict(r)
+        d["arguments"] = json.loads(d["arguments"]) if d["arguments"] else {}
+        d["approval"] = json.loads(d["approval"]) if d["approval"] else None
+        out.setdefault(d.pop("turn_id"), []).append(d)
+    return out

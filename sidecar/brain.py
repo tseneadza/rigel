@@ -157,7 +157,80 @@ def respond(text: str, llm_config: dict | None = None) -> tuple[str, list[dict]]
     return reply, commands
 
 
-def _respond_via_provider(text: str, llm_config: dict | None) -> tuple[str, list[dict]]:
+TOOLBOX_OFFLINE_NOTE = (
+    " Your tool gateway, ToolBox, is unreachable right now, so you have no tools this turn. If the "
+    "user asks for something that needs a tool (system status, mail, files, the web, their notes), "
+    "say plainly that you can't reach ToolBox at the moment, and don't guess the answer."
+)
+
+
+def respond_with_tools(text: str, llm_config: dict | None, toolbox_config: dict | None) -> dict:
+    """``respond()`` plus ToolBox tool use. Returns ``{reply, commands,
+    tool_steps, toolbox}`` where ``toolbox`` is ``{state, detail?}``:
+    'used' (tool loop ran), 'offline' (ToolBox unreachable — answered
+    without tools, and the brain was told so), 'unsupported' (provider or
+    Ollama model can't do tool calls), or 'disabled'. Rigel's own
+    deterministic answers and command intents behave exactly as in
+    ``respond()``."""
+    from sidecar import tool_brain
+    from sidecar.toolbox_client import ToolBoxUnavailable
+
+    text = text.strip()
+    toolbox_config = toolbox_config or {}
+    provider = (llm_config or {}).get("provider", "stub")
+    out = {"reply": "Standing by.", "commands": [], "tool_steps": [], "toolbox": {"state": "disabled"}}
+    if not text:
+        return out
+
+    running_apps_reply = _running_apps_reply(text)
+    if running_apps_reply is not None:
+        return {**out, "reply": running_apps_reply}
+
+    enabled = toolbox_config.get("enabled", True)
+    supported = provider == "claude" or (
+        provider == "ollama"
+        and tool_brain.ollama_supports_tools(
+            llm_config["ollama_model"], llm_config.get("ollama_host", llm_providers.DEFAULT_OLLAMA_HOST))
+    )
+    reply: str | None = None
+    commands: list[dict] = []
+    if enabled and supported:
+        try:
+            reply, commands, steps = tool_brain.respond(text, llm_config, toolbox_config)
+        except ToolBoxUnavailable as e:
+            logger.warning("ToolBox unavailable (%s); answering without tools.", e)
+            out["toolbox"] = {"state": "offline", "detail": str(e)}
+            out["tool_steps"] = [s.public() for s in getattr(e, "steps", [])]
+        except llm_providers.LLMError as e:
+            logger.warning("Tool brain failed (%s); falling back.", e)
+            out["toolbox"] = {"state": "error", "detail": str(e)}
+        else:
+            out["toolbox"] = {"state": "used" if steps else "available"}
+            out["tool_steps"] = [s.public() for s in steps]
+            if provider == "claude":
+                commands = commands + _app_commands(text, llm_config)
+    elif enabled:
+        out["toolbox"] = {"state": "unsupported",
+                          "detail": f"{provider} can't use tools" if provider != "ollama"
+                          else f"{llm_config.get('ollama_model')} doesn't support tool calling"}
+
+    if reply is None:
+        extra = TOOLBOX_OFFLINE_NOTE if out["toolbox"]["state"] == "offline" else ""
+        reply, commands = _respond_via_provider(text, llm_config, extra)
+
+    # Menu-action fallback only when ToolBox didn't already handle the turn:
+    # after a tool answered, a fuzzy menu note ("could be File > New File…")
+    # is noise unrelated to what was asked (seen live 2026-11-15).
+    if not commands and not out["tool_steps"]:
+        menu_commands, note = _menu_action_commands(text)
+        commands = menu_commands
+        if note:
+            reply = f"{reply} {note}"
+    out["reply"], out["commands"] = reply, commands
+    return out
+
+
+def _respond_via_provider(text: str, llm_config: dict | None, extra_system: str = "") -> tuple[str, list[dict]]:
     """The original provider dispatch (stub, Claude, or Ollama), unchanged
     in behavior — split out of ``respond()`` so Slice 3's read-only menu
     note can be layered on top of *any* provider's result in one place,
@@ -166,7 +239,7 @@ def _respond_via_provider(text: str, llm_config: dict | None) -> tuple[str, list
 
     if provider == "claude":
         try:
-            reply, commands = llm_providers.claude_respond(text, llm_config["claude_model"])
+            reply, commands = llm_providers.claude_respond(text, llm_config["claude_model"], extra_system)
         except llm_providers.LLMError as e:
             logger.warning("Claude brain failed (%s); falling back to stub.", e)
         else:
@@ -177,6 +250,7 @@ def _respond_via_provider(text: str, llm_config: dict | None) -> tuple[str, list
                 text,
                 llm_config["ollama_model"],
                 llm_config.get("ollama_host", llm_providers.DEFAULT_OLLAMA_HOST),
+                extra_system,
             )
         except llm_providers.LLMError as e:
             logger.warning("Ollama brain failed (%s); falling back to stub.", e)

@@ -797,3 +797,124 @@ body[data-minimized="true"] {
   cursor: pointer;
 }
 .settings-save-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* ── ToolBox (MCP gateway): folded tool steps, approval card, badge ─────── */
+.turn { display: flex; flex-direction: column; gap: 4px; }
+.tool-steps { margin-left: 58px; }
+.tool-fold {
+  background: transparent;
+  border: 1px dashed rgba(var(--ice), 0.28);
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.tool-fold:hover { color: rgb(var(--ice)); border-color: rgba(var(--ice), 0.5); }
+.tool-fold--warn { border-color: rgba(255, 200, 90, 0.5); }
+.tool-fold-caret { margin-right: 6px; }
+.tool-fold-note { color: #f0c674; }
+.tool-chips { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+.tool-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--ice), 0.28);
+  background: rgba(var(--ice), 0.06);
+  color: var(--text);
+}
+.tool-chip--find { border-style: dashed; color: var(--text-dim); }
+.tool-ms { color: var(--text-dim); }
+.tool-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+.tool-dot--ok { background: #78e6aa; box-shadow: 0 0 6px #78e6aa; }
+.tool-dot--declined, .tool-dot--expired { background: #ffc85a; box-shadow: 0 0 6px #ffc85a; }
+.tool-dot--error { background: #ff7878; box-shadow: 0 0 6px #ff7878; }
+
+.tb-approvals { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.tb-card {
+  border: 1px solid rgba(255, 200, 90, 0.5);
+  border-radius: 12px;
+  background: rgba(40, 30, 8, 0.45);
+  padding: 12px 14px;
+}
+.tb-card-hd {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #ffc85a;
+}
+.tb-risk { opacity: 0.85; }
+.tb-card-q { font-size: 14px; margin: 8px 0 4px; color: var(--text); }
+.tb-arg {
+  display: block;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: #cfe0ff;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 3px 8px;
+  border-radius: 6px;
+  margin: 3px 0;
+  word-break: break-all;
+}
+.tb-card-said { font-size: 12px; color: var(--text-dim); margin: 6px 0 10px; }
+.tb-btns { display: flex; gap: 8px; align-items: center; }
+.tb-btns button {
+  border: none;
+  border-radius: 8px;
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tb-yes { background: rgb(var(--ice)); color: #04070f; }
+.tb-no { background: transparent; color: var(--text); border: 1px solid rgba(var(--ice), 0.35) !important; }
+.tb-voice { margin-left: auto; font-size: 12px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; }
+.tb-bars { display: inline-flex; gap: 2px; align-items: flex-end; height: 12px; }
+.tb-bars i { width: 3px; background: rgb(var(--ice)); border-radius: 2px; animation: tb-bar 1s infinite ease-in-out; }
+.tb-bars i:nth-child(2) { animation-delay: 0.15s; }
+.tb-bars i:nth-child(3) { animation-delay: 0.3s; }
+.tb-bars i:nth-child(4) { animation-delay: 0.45s; }
+@keyframes tb-bar { 0%, 100% { height: 3px; } 50% { height: 12px; } }
+@media (prefers-reduced-motion: reduce) { .tb-bars i { animation: none; height: 8px; } }
+
+.tb-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  border: 1px solid rgba(var(--ice), 0.2);
+  border-radius: 999px;
+  padding: 3px 10px;
+  margin-left: 10px;
+}
+.tb-badge-dot { width: 7px; height: 7px; border-radius: 50%; background: #78e6aa; }
+.tb-badge--off { color: #ff9a9a; border-color: rgba(255, 120, 120, 0.4); }
+.tb-badge--off .tb-badge-dot { background: #ff7878; }
+
+.toolbox-settings { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(var(--ice), 0.15); }
+.settings-subhead {
+  margin: 0 0 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgb(var(--ice));
+}
+
+/* The orb (a large stage, 620px at rest) overlaps the console; its electron
+   layer sat on top and swallowed clicks on the console's cards (found live,
+   2026-11-15: Decline on a ToolBox approval hit .orb-electrons). The dock
+   sits above the stage. */
+.dock { position: relative; z-index: 2; }
+.tb-card { background: rgba(28, 22, 8, 0.94); backdrop-filter: blur(8px); }

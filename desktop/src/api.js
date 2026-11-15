@@ -51,3 +51,25 @@ export const saveWhitelistConfig = (config) =>
     method: "POST",
     body: JSON.stringify(config),
   });
+
+// ── ToolBox (MCP gateway) ────────────────────────────────────────────────
+export const getToolboxStatus = () => req("/api/rigel/toolbox/status");
+export const getToolboxConfig = () => req("/api/rigel/settings/toolbox-config");
+export const saveToolboxConfig = (config) =>
+  req("/api/rigel/settings/toolbox-config", {
+    method: "POST",
+    body: JSON.stringify(config),
+  });
+/** Approvals a ToolBox server is waiting on (MCP elicitation). */
+export const getToolboxApprovals = () => req("/api/rigel/toolbox/approvals");
+export const answerToolboxApproval = (id, decision, via = "click") =>
+  req(`/api/rigel/toolbox/approvals/${id}/answer`, {
+    method: "POST",
+    body: JSON.stringify({ decision, via }),
+  });
+/** Free-form answer (spoken or typed). Returns {decision: approve|decline|unclear|closed, follow_up?}. */
+export const interpretToolboxApproval = (id, text, via = "voice") =>
+  req(`/api/rigel/toolbox/approvals/${id}/interpret`, {
+    method: "POST",
+    body: JSON.stringify({ text, via }),
+  });

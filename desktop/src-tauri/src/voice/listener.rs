@@ -28,6 +28,9 @@ const MAX_RECORDING: Duration = Duration::from_secs(12);
 // fires — people often pause briefly after "Hey Rigel" before continuing.
 // Silence during this window doesn't end the recording.
 const SPEECH_ONSET_GRACE: Duration = Duration::from_millis(2500);
+// A listen-once recording (answering a ToolBox approval) follows Rigel
+// asking a question, so give the user longer to start answering.
+const LISTEN_ONCE_ONSET_GRACE: Duration = Duration::from_millis(6000);
 /// How many captured utterances to keep in ~/.rigel/debug for inspection.
 const DEBUG_KEEP: usize = 12;
 /// How often the idle status line is logged.
@@ -52,6 +55,7 @@ enum Mode {
         heard_speech: bool,
         speech_threshold: f32,
         chunk_levels: Vec<f32>,
+        onset_grace: Duration,
     },
 }
 
@@ -264,6 +268,31 @@ fn run(app: AppHandle, wakeword_path: PathBuf, stop_flag: Arc<AtomicBool>) -> Re
                     );
                 }
 
+                // Asked to hear one answer without the wake word (ToolBox
+                // approval). Checked only here, after the TTS mute above, so
+                // the question Rigel just spoke is never recorded as the answer.
+                if super::take_listen_once() {
+                    let speech_threshold = SPEECH_RMS_FLOOR.max(SPEECH_OVER_NOISE * noise_floor);
+                    log::info!(
+                        "voice listener: listen-once (no wake word), speech_threshold={:.5}",
+                        speech_threshold
+                    );
+                    let _ = app.emit("voice://state", serde_json::json!({ "state": "recording" }));
+                    let mut buffer = Vec::with_capacity(sample_rate as usize * channels as usize * 6);
+                    buffer.extend_from_slice(&chunk);
+                    frame_buffer.clear();
+                    mode = Mode::Recording {
+                        buffer,
+                        last_voice: Instant::now(),
+                        started: Instant::now(),
+                        heard_speech: level > speech_threshold,
+                        speech_threshold,
+                        chunk_levels: Vec::with_capacity(512),
+                        onset_grace: LISTEN_ONCE_ONSET_GRACE,
+                    };
+                    continue;
+                }
+
                 frame_buffer.extend_from_slice(&chunk);
                 let mut detected: Option<RustpotterDetection> = None;
                 while frame_buffer.len() >= samples_per_frame {
@@ -297,6 +326,7 @@ fn run(app: AppHandle, wakeword_path: PathBuf, stop_flag: Arc<AtomicBool>) -> Re
                         heard_speech: false,
                         speech_threshold,
                         chunk_levels: Vec::with_capacity(512),
+                        onset_grace: SPEECH_ONSET_GRACE,
                     };
                 }
             }
@@ -307,6 +337,7 @@ fn run(app: AppHandle, wakeword_path: PathBuf, stop_flag: Arc<AtomicBool>) -> Re
                 heard_speech,
                 speech_threshold,
                 chunk_levels,
+                onset_grace,
             } => {
                 let level = rms(&chunk);
                 chunk_levels.push(level);
@@ -320,7 +351,7 @@ fn run(app: AppHandle, wakeword_path: PathBuf, stop_flag: Arc<AtomicBool>) -> Re
                 // the hard cap can end recording — a quiet pause right after
                 // the wake word must not cut the command off before it starts.
                 let went_quiet = *heard_speech && last_voice.elapsed() >= SILENCE_HANGOVER;
-                let gave_up_waiting = !*heard_speech && started.elapsed() >= SPEECH_ONSET_GRACE;
+                let gave_up_waiting = !*heard_speech && started.elapsed() >= *onset_grace;
                 let timed_out = started.elapsed() >= MAX_RECORDING;
 
                 if went_quiet || gave_up_waiting || timed_out {

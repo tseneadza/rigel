@@ -17,6 +17,7 @@ pub fn run() {
       voice::stt::voice_download_stt_model,
       voice::voice_set_enabled,
       voice::voice_is_enabled,
+      voice::voice_listen_once,
     ])
     .setup(|app| {
       // Logging is on in release builds too: the voice pipeline can only be
