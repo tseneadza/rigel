@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rigel · Voice picker — mockup v1</title>
+<style>
+:root{--bg:#04070f;--bg-2:#060c1a;--ice:120,200,255;--text:#dcebff;--dim:#7f93b3;--ok:120,230,170;--warn:255,200,90;--pink:255,150,200;--mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1200px 800px at 50% 20%,var(--bg-2),var(--bg) 70%);color:var(--text);font-family:system-ui,-apple-system,sans-serif;padding:32px 24px 60px;min-height:100vh}
+h1{font-family:var(--mono);font-size:18px;color:rgb(var(--ice));letter-spacing:.08em;margin:0 0 4px}
+.sub{color:var(--dim);font-size:13px;margin:0 0 28px;max-width:900px;line-height:1.5}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:22px;max-width:1400px;align-items:start}
+.scene{border:1px solid rgba(var(--ice),.18);border-radius:16px;background:rgba(10,20,38,.45);padding:18px}
+.scene h2{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:rgb(var(--ice));margin:0 0 4px}
+.scene p.note{color:var(--dim);font-size:12.5px;margin:0 0 14px;line-height:1.5}
+.tag-before{color:rgb(var(--warn))}
+
+/* Settings panel replica */
+.panel{width:min(480px,100%);margin:0 auto;border:1px solid rgba(var(--ice),.25);border-radius:16px;background:rgba(6,12,26,.96);padding:16px 18px;box-shadow:0 0 40px rgba(var(--ice),.08)}
+.tabs{display:flex;gap:6px;margin-bottom:14px}
+.tab{font-family:var(--mono);font-size:11px;padding:5px 10px;border-radius:6px;color:var(--dim);border:1px solid transparent}
+.tab.on{color:rgb(var(--ice));border-color:rgba(var(--ice),.3);background:rgba(var(--ice),.06)}
+.check{display:flex;gap:8px;align-items:center;font-size:13px;margin:0 0 10px;color:var(--text)}
+.check i{width:14px;height:14px;border-radius:4px;border:1px solid rgba(var(--ice),.4);background:rgba(var(--ice),.25);display:inline-block}
+.row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.row > label{flex:0 0 50px;font-weight:600;font-family:var(--mono);font-size:11px;color:var(--dim)}
+.btn{flex:0 0 auto;padding:4px 10px;border:1px solid rgba(var(--ice),.3);border-radius:6px;background:transparent;color:var(--dim);font-family:var(--mono);font-size:11px;cursor:pointer}
+.btn:hover{border-color:rgb(var(--ice));color:rgb(var(--ice));background:rgba(var(--ice),.05)}
+.btn.primary{color:rgb(var(--ice));border-color:rgba(var(--ice),.5)}
+.hint{font-size:12px;color:var(--dim);margin:2px 0 10px;line-height:1.45}
+.hint a{color:rgb(var(--ice));text-decoration:none;border-bottom:1px dotted rgba(var(--ice),.5)}
+
+/* "Before": native select look */
+.fake-select{flex:1;background:rgba(var(--ice),.06);border:1px solid rgba(var(--ice),.2);border-radius:6px;color:var(--text);padding:6px 8px;font-size:13px;position:relative}
+.fake-select::after{content:"▾";position:absolute;right:8px;color:var(--dim)}
+.native-list{margin:-4px 0 10px 60px;border:1px solid rgba(var(--ice),.2);border-radius:6px;background:#0b1424;max-height:180px;overflow:hidden;font-size:12.5px;position:relative}
+.native-list div{padding:3px 10px;color:#b9cae8}
+.native-list div.sel{background:rgba(var(--ice),.25);color:#fff}
+.native-list .fade{position:absolute;bottom:0;left:0;right:0;height:50px;background:linear-gradient(transparent,#0b1424)}
+.problems{margin:12px 0 0;padding:0 0 0 18px;font-size:12.5px;color:var(--dim);line-height:1.6}
+.problems b{color:rgb(var(--warn));font-weight:600}
+
+/* "After": custom picker */
+.picker{flex:1;position:relative}
+.picker-btn{width:100%;display:flex;align-items:center;gap:8px;background:rgba(var(--ice),.06);border:1px solid rgba(var(--ice),.2);border-radius:6px;color:var(--text);padding:6px 8px;font-size:13px;cursor:pointer;text-align:left}
+.picker-btn:hover,.picker.open .picker-btn{border-color:rgba(var(--ice),.5)}
+.picker-btn .caret{margin-left:auto;color:var(--dim)}
+.badge{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;padding:1px 6px;border-radius:999px;border:1px solid rgba(var(--ice),.35);color:rgb(var(--ice));text-transform:uppercase}
+.badge.def{border-color:rgba(var(--ok),.5);color:rgb(var(--ok))}
+.badge.acc{border-color:rgba(var(--dim),.0);color:var(--dim);padding:1px 0}
+.menu{display:none;position:absolute;top:calc(100% + 4px);left:0;right:-52px;z-index:5;border:1px solid rgba(var(--ice),.35);border-radius:10px;background:#081122;box-shadow:0 12px 40px rgba(0,0,0,.6),0 0 24px rgba(var(--ice),.08);padding:8px}
+.picker.open .menu{display:block}
+.filters{display:flex;flex-wrap:wrap;gap:6px;padding:2px 2px 8px;border-bottom:1px solid rgba(var(--ice),.12);margin-bottom:6px}
+.seg{display:inline-flex;border:1px solid rgba(var(--ice),.25);border-radius:999px;overflow:hidden}
+.seg button{background:transparent;border:0;color:var(--dim);font-family:var(--mono);font-size:10.5px;padding:4px 9px;cursor:pointer}
+.seg button.on{background:rgba(var(--ice),.18);color:rgb(var(--ice))}
+.search{flex:1;min-width:90px;background:rgba(var(--ice),.05);border:1px solid rgba(var(--ice),.18);border-radius:999px;color:var(--text);font-size:11.5px;padding:4px 10px;outline:none}
+.list{max-height:300px;overflow-y:auto;padding-right:2px}
+.group-h{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);padding:8px 6px 4px}
+.group-h .sym{font-size:12px}
+.group-h .ct{margin-left:auto;opacity:.6}
+.opt{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;font-size:13px;cursor:pointer;color:#cfe0fb}
+.opt:hover{background:rgba(var(--ice),.08)}
+.opt.sel{background:rgba(var(--ice),.16);color:#fff}
+.opt .tick{width:12px;color:rgb(var(--ice))}
+.opt .acc{font-family:var(--mono);font-size:10px;color:var(--dim)}
+.opt .play{margin-left:auto;width:22px;height:22px;border-radius:50%;border:1px solid rgba(var(--ice),.3);display:grid;place-items:center;font-size:9px;color:var(--dim);opacity:0;transition:.12s}
+.opt:hover .play,.opt.playing .play{opacity:1}
+.opt.playing .play{color:rgb(var(--ok));border-color:rgba(var(--ok),.6)}
+.default-row{border:1px solid rgba(var(--ok),.25);background:rgba(var(--ok),.05);margin-bottom:4px}
+.empty{color:var(--dim);font-size:12px;padding:14px 8px;text-align:center}
+.more{display:block;margin:8px 4px 2px;font-size:11.5px;color:var(--dim)}
+.more a{color:rgb(var(--ice));text-decoration:none}
+
+/* optgroup variant */
+.og{margin:-4px 0 10px 60px;border:1px solid rgba(var(--ice),.2);border-radius:6px;background:#0b1424;font-size:12.5px;max-height:330px;overflow:hidden;position:relative}
+.og .h{padding:5px 10px 2px;color:var(--dim);font-weight:700;font-size:11.5px}
+.og .i{padding:2px 10px 2px 22px;color:#b9cae8}
+.og .i.sel{background:rgba(var(--ice),.25);color:#fff}
+.og .fade{position:absolute;bottom:0;left:0;right:0;height:50px;background:linear-gradient(transparent,#0b1424)}
+
+.legend{max-width:1400px;margin-top:22px;border:1px solid rgba(var(--ice),.18);border-radius:16px;background:rgba(10,20,38,.45);padding:16px 18px;font-size:13px;line-height:1.6;color:#b9cae8}
+.legend h2{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:rgb(var(--ice));margin:0 0 8px}
+.legend table{border-collapse:collapse;width:100%;font-size:12.5px}
+.legend td,.legend th{text-align:left;padding:5px 8px;border-bottom:1px solid rgba(var(--ice),.1);vertical-align:top}
+.legend th{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);font-weight:500}
+.q{color:rgb(var(--warn))}
+</style>
+</head>
+<body>
+<h1>RIGEL · VOICE PICKER — MOCKUP v1</h1>
+<p class="sub">Settings ⚙ → Voice. Voice names, accents and the default (<b>Samantha</b>) are the real English voices on this Mac. Scene B is clickable: open the picker, flip the filters, hover a voice for the ▶ preview.</p>
+
+<div class="grid">
+
+  <!-- A: today -->
+  <section class="scene">
+    <h2><span class="tag-before">A · Today</span></h2>
+    <p class="note">One flat native dropdown with all 184 entries (every language), sorted A–Z.</p>
+    <div class="panel">
+      <div class="tabs"><span class="tab">General</span><span class="tab">Brain</span><span class="tab on">Voice</span></div>
+      <div class="check"><i></i>Listen for the wake word</div>
+      <div class="row"><label>Voice:</label><div class="fake-select">System default</div><button class="btn">Test</button></div>
+      <div class="native-list">
+        <div class="sel">System default</div><div>Albert</div><div>Alice</div><div>Alva</div><div>Aman</div><div>Amélie</div><div>Amira</div><div>Anna</div><div>Aru</div><div>Bad</div><div>Bahh</div><div>Bells</div><div>Boing</div>
+        <div class="fade"></div>
+      </div>
+    </div>
+    <ul class="problems">
+      <li><b>No named default</b>: "System default" doesn't say who will speak.</li>
+      <li><b>Truncated names</b>: only the first word is kept, so "Bad News" shows as "Bad" (and fails), and the 14 language variants of Eddy, Flo, Grandma… collapse into one.</li>
+      <li><b>No grouping</b>: Italian, Swedish and joke voices sit alongside the English ones.</li>
+    </ul>
+  </section>
+
+  <!-- B: proposed custom picker -->
+  <section class="scene">
+    <h2>B · Proposed: grouped picker (recommended)</h2>
+    <p class="note">The default is pinned at the top. Two filters (gender, and Lifelike vs Artificial) narrow the list, and every row has a ▶ preview so you don't need to choose one and then press Test.</p>
+    <div class="panel" style="min-height:470px">
+      <div class="tabs"><span class="tab">General</span><span class="tab">Brain</span><span class="tab on">Voice</span></div>
+      <div class="check"><i></i>Listen for the wake word</div>
+      <div class="row">
+        <label>Voice:</label>
+        <div class="picker open" id="picker">
+          <button class="picker-btn" id="pickerBtn"><span id="curName">Samantha</span><span class="badge acc" id="curAcc">US</span><span class="badge def" id="curDef">Default</span><span class="caret">▾</span></button>
+          <div class="menu">
+            <div class="filters">
+              <div class="seg" data-f="g"><button data-v="all" class="on">All</button><button data-v="F">♀ Female</button><button data-v="M">♂ Male</button></div>
+              <div class="seg" data-f="k"><button data-v="all" class="on">All</button><button data-v="life">Lifelike</button><button data-v="art">Artificial</button></div>
+              <input class="search" id="search" placeholder="Search…">
+            </div>
+            <div class="list" id="list"></div>
+            <span class="more">Want more natural voices? Download <i>Enhanced</i> or <i>Premium</i> ones in <a href="#">System Settings → Accessibility → Spoken Content ↗</a> and they'll show up under Lifelike.</span>
+          </div>
+        </div>
+        <button class="btn">Test</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- C: optgroup variant -->
+  <section class="scene">
+    <h2>C · Alternative: native dropdown with sections</h2>
+    <p class="note">Cheaper to build: the same groups as plain <code>&lt;optgroup&gt;</code> headers in the existing dropdown. No filters, no per-row preview, and it looks like a standard Mac menu.</p>
+    <div class="panel">
+      <div class="tabs"><span class="tab">General</span><span class="tab">Brain</span><span class="tab on">Voice</span></div>
+      <div class="row"><label>Voice:</label><div class="fake-select">★ Samantha (Default)</div><button class="btn">Test</button></div>
+      <div class="og">
+        <div class="i sel" style="padding-left:10px">★ Samantha (Default)</div>
+        <div class="h">♀ Female · Lifelike</div><div class="i">Karen — AU</div><div class="i">Moira — IE</div><div class="i">Tessa — ZA</div>
+        <div class="h">♂ Male · Lifelike</div><div class="i">Daniel — GB</div><div class="i">Rishi — IN</div>
+        <div class="h">♀ Female · Artificial</div><div class="i">Flo — US</div><div class="i">Grandma — US</div><div class="i">Kathy — US</div><div class="i">Sandy — US</div>
+        <div class="fade"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="legend">
+  <h2>How voices get sorted</h2>
+  <table>
+    <tr><th>Group</th><th>Voices on this Mac (English)</th><th>Where the label comes from</th></tr>
+    <tr><td>Lifelike</td><td>Samantha, Karen, Moira, Tessa (♀) · Daniel, Rishi (♂), plus any Enhanced or Premium voice you download later</td><td>macOS reports gender for these. Any Enhanced or Premium voice counts as Lifelike automatically.</td></tr>
+    <tr><td>Artificial</td><td>Flo, Grandma, Sandy, Shelley, Kathy (♀) · Eddy, Grandpa, Reed, Rocko, Albert, Fred, Junior, Ralph (♂)</td><td>macOS reports no gender for most of these, so Rigel keeps a small built-in gender list.</td></tr>
+    <tr><td>Novelty / effects</td><td>Bad News, Bahh, Bells, Boing, Bubbles, Cellos, Good News, Jester, Organ, Superstar, Trinoids, Whisper, Wobble, Zarvox</td><td>No gender. Shown last (or hidden) and never mixed into ♀/♂.</td></tr>
+    <tr><td>Accent tag</td><td>US · GB · AU · IE · IN · ZA</td><td>From each voice's locale (en-GB → GB). It also tells the Eddy/Flo/Grandma variants apart.</td></tr>
+  </table>
+  <p style="margin:12px 0 0" class="q">Open questions: (1) Is Samantha the "original" voice you mean? (2) English-only, or keep the other languages behind a "Show all languages" toggle? (3) Should novelty voices be listed at all?</p>
+</div>
+
+<script>
+const V=[
+ ["Samantha","US","F","life"],["Karen","AU","F","life"],["Moira","IE","F","life"],["Tessa","ZA","F","life"],
+ ["Daniel","GB","M","life"],["Rishi","IN","M","life"],
+ ["Flo","US","F","art"],["Flo","GB","F","art"],["Grandma","US","F","art"],["Grandma","GB","F","art"],["Kathy","US","F","art"],["Sandy","US","F","art"],["Sandy","GB","F","art"],["Shelley","US","F","art"],["Shelley","GB","F","art"],
+ ["Eddy","US","M","art"],["Eddy","GB","M","art"],["Grandpa","US","M","art"],["Grandpa","GB","M","art"],["Reed","US","M","art"],["Reed","GB","M","art"],["Rocko","US","M","art"],["Rocko","GB","M","art"],["Albert","US","M","art"],["Fred","US","M","art"],["Junior","US","M","art"],["Ralph","US","M","art"],
+ ["Bad News","US","N","nov"],["Bahh","US","N","nov"],["Bells","US","N","nov"],["Boing","US","N","nov"],["Bubbles","US","N","nov"],["Cellos","US","N","nov"],["Good News","US","N","nov"],["Jester","US","N","nov"],["Organ","US","N","nov"],["Superstar","US","N","nov"],["Trinoids","US","N","nov"],["Whisper","US","N","nov"],["Wobble","US","N","nov"],["Zarvox","US","N","nov"]
+];
+const DEF="Samantha|US";
+let sel=DEF,f={g:"all",k:"all"},q="";
+const GROUPS=[["F","life","♀","Female · Lifelike"],["M","life","♂","Male · Lifelike"],["F","art","♀","Female · Artificial"],["M","art","♂","Male · Artificial"],["N","nov","✦","Novelty · effects"]];
+const list=document.getElementById("list");
+function row(v,isDef){
+  const id=v[0]+"|"+v[1];
+  const d=document.createElement("div");
+  d.className="opt"+(id===sel?" sel":"")+(isDef?" default-row":"");
+  d.innerHTML=`<span class="tick">${id===sel?"✓":""}</span><span>${v[0]}</span><span class="acc">${v[1]}</span>${isDef?'<span class="badge def">Default</span>':""}<span class="play" title="Preview">▶</span>`;
+  d.onclick=e=>{
+    if(e.target.classList.contains("play")){d.classList.add("playing");setTimeout(()=>d.classList.remove("playing"),1200);return;}
+    sel=id;document.getElementById("curName").textContent=v[0];document.getElementById("curAcc").textContent=v[1];
+    document.getElementById("curDef").style.display=id===DEF?"":"none";render();
+  };
+  return d;
+}
+function render(){
+  list.innerHTML="";
+  const dv=V.find(v=>v[0]+"|"+v[1]===DEF);
+  if(!q) list.appendChild(row(dv,true));
+  let n=0;
+  for(const [g,k,sym,label] of GROUPS){
+    if(f.g!=="all" && g!==f.g) continue;
+    if(f.k!=="all" && !(f.k==="art"? (k==="art"||k==="nov") : k===f.k)) continue;
+    const items=V.filter(v=>v[2]===g&&v[3]===k&&(v[0]+"|"+v[1])!==(q?"":DEF)&&v[0].toLowerCase().includes(q));
+    if(!items.length) continue;
+    const h=document.createElement("div");h.className="group-h";h.innerHTML=`<span class="sym">${sym}</span>${label}<span class="ct">${items.length}</span>`;list.appendChild(h);
+    items.forEach(v=>{list.appendChild(row(v,false));n++;});
+  }
+  if(!n&&q){list.innerHTML='<div class="empty">No voices match.</div>';}
+}
+document.querySelectorAll(".seg").forEach(s=>s.addEventListener("click",e=>{
+  if(e.target.tagName!=="BUTTON")return;
+  s.querySelectorAll("button").forEach(b=>b.classList.remove("on"));e.target.classList.add("on");
+  f[s.dataset.f]=e.target.dataset.v;render();
+}));
+document.getElementById("search").addEventListener("input",e=>{q=e.target.value.trim().toLowerCase();render();});
+document.getElementById("pickerBtn").onclick=()=>document.getElementById("picker").classList.toggle("open");
+render();
+</script>
+</body>
+</html>

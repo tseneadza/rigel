@@ -218,7 +218,7 @@ The persisted setting controlling the brain's provider choice: `provider`,
 `claude_model`, `ollama_model`, `ollama_host`.
 
 **`voice_config`**
-The persisted voice preferences: `tts_voice` (macOS voice name or null),
+The persisted voice preferences: `tts_voice` (exact `say -v` voice name, e.g. `"Eddy (English (US))"`; null = Samantha),
 `speak_typed_replies`, `enabled` (start wake-word listening at launch).
 Preferences only — the wake-word reference and speech model are files
 under `~/.rigel/`, owned by the native app. See

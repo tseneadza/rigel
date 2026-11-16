@@ -24,7 +24,7 @@ Returns the persisted voice preferences, or defaults if never saved.
 
 | Field | Type | Meaning |
 |-------|------|---------|
-| `tts_voice` | string \| null | macOS voice name from `say -v ?` (e.g. `"Samantha"`); `null` = system default. |
+| `tts_voice` | string \| null | Exact voice name from `say -v ?` (e.g. `"Samantha"`, `"Eddy (English (US))"`); `null` = Rigel's default, Samantha. |
 | `speak_typed_replies` | boolean | Speak replies to typed messages too (voice-initiated replies are always spoken). |
 | `enabled` | boolean | Start always-on wake-word listening at launch. The desktop app also applies this immediately when toggled. |
 
@@ -62,4 +62,5 @@ the rest on **Save**.
   `voice_stop_speaking`, `voice_list_tts_voices`, `voice_enroll_wakeword`,
   `voice_wakeword_status`, `voice_clear_wakeword`, `voice_stt_model_status`,
   `voice_download_stt_model`, `voice_set_enabled`, `voice_is_enabled` —
-  wrapped in `desktop/src/voice.js`.
+  wrapped in `desktop/src/voice.js`. `voice_list_tts_voices` returns
+  `[{name, label, locale, gender: "F"|"M"|"U", kind: "lifelike"|"artificial"|"novelty", is_default}]`.

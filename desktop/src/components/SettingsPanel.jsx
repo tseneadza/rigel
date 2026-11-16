@@ -30,6 +30,7 @@ import {
   isVoiceEnabled,
   subscribeInEffect,
 } from "../voice.js";
+import VoicePicker, { DEFAULT_VOICE_NAME } from "./VoicePicker.jsx";
 
 const DEFAULT_LLM_CONFIG = {
   provider: "stub",
@@ -39,7 +40,7 @@ const DEFAULT_LLM_CONFIG = {
 };
 
 const DEFAULT_VOICE_CONFIG = {
-  tts_voice: null,
+  tts_voice: DEFAULT_VOICE_NAME,
   speak_typed_replies: false,
   enabled: false,
 };
@@ -108,8 +109,9 @@ export default function SettingsPanel({ open, onClose, orbConfig, onOrbConfigCha
     // the mic live with no indication.
     Promise.all([getVoiceConfig(), isVoiceEnabled().catch(() => null)])
       .then(([config, actuallyEnabled]) => {
+        const named = { ...config, tts_voice: config.tts_voice || DEFAULT_VOICE_NAME };
         setVoiceConfig(
-          actuallyEnabled === null ? config : { ...config, enabled: actuallyEnabled }
+          actuallyEnabled === null ? named : { ...named, enabled: actuallyEnabled }
         );
       })
       .catch(() => {});
@@ -515,22 +517,17 @@ export default function SettingsPanel({ open, onClose, orbConfig, onOrbConfigCha
                 Also speak replies to typed messages
               </label>
 
-              <div className="settings-row">
+              <div className="settings-row vp-row">
                 <label>Voice:</label>
-                <select
-                  value={voiceConfig.tts_voice || ""}
-                  onChange={(e) => updateVoiceConfig({ tts_voice: e.target.value || null })}
-                >
-                  <option value="">System default</option>
-                  {ttsVoices.map((v) => (
-                    <option key={v} value={v}>
-                      {v}
-                    </option>
-                  ))}
-                </select>
+                <VoicePicker
+                  voices={ttsVoices}
+                  value={voiceConfig.tts_voice}
+                  onChange={(name) => updateVoiceConfig({ tts_voice: name })}
+                  onPreview={(name, text) => speak(text, name)}
+                />
                 <button
                   className="reset-btn"
-                  onClick={() => speak("Standing by.", voiceConfig.tts_voice)}
+                  onClick={() => speak("Standing by.", voiceConfig.tts_voice || DEFAULT_VOICE_NAME)}
                 >
                   Test
                 </button>

@@ -41,7 +41,8 @@ enable Rigel, then relaunch.
    take where it heard nothing — just try that one again.
 2. **Download model** (`ggml-base.en.bin`, ~148 MB, from Hugging Face).
 3. Tick **Listen for the wake word.** Applies and saves immediately.
-4. Optionally pick a **voice** and press **Test**; tick *Also speak
+4. Optionally pick a **voice** (Samantha is the default; filter by ♀/♂ and
+   Lifelike/Artificial, ▶ to preview) and press **Test**; tick *Also speak
    replies to typed messages* if you want that. Press **Save** for these.
 
 ### 4. Try it

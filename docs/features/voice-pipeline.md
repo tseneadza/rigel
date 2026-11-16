@@ -27,8 +27,17 @@ speech. No accounts, no network calls, no audio leaves the machine.
   duration of a spoken reply plus 0.7 s, so it can't hear itself.
 - **Typed replies stay silent** unless you tick *Also speak replies to
   typed messages*. Voice-initiated replies are always spoken.
-- **Voice picker:** any installed macOS voice (`say -v ?`), with a Test
-  button.
+- **Voice picker:** any installed macOS voice (`say -v ?`). The default,
+  **Samantha**, is pinned at the top. Voices are grouped ♀ Female / ♂ Male ×
+  Lifelike / Artificial (novelty voices like Zarvox last), with filters, search,
+  an *All languages* toggle (English only by default), accent tags
+  (US/GB/AU/IE/IN/ZA) and a ▶ preview on every row. Gender and
+  lifelike/artificial come from tables in `src/voice/tts.rs` (macOS doesn't
+  report gender for the Eloquence/MacinTalk voices); downloaded *Enhanced* or
+  *Premium* voices count as Lifelike. Mockup:
+  [`docs/mockups/voice-picker-v1.html`](../mockups/voice-picker-v1.html).
+- **No saved voice = Samantha**, not the macOS system voice, so every reply
+  sounds the same whatever System Settings says.
 
 ## Technical Implementation
 
