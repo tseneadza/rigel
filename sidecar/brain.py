@@ -314,6 +314,15 @@ def _resolve_target_app(text: str) -> str | None:
     return best
 
 
+def _without_app_name(text: str, app: str) -> str:
+    """``text`` with the target app's name removed before fuzzy matching.
+    Otherwise "copy this in TextEdit" scores the app menu's own items
+    ("TextEdit > About TextEdit", "TextEdit > Services") as high as
+    "Edit > Copy", and "show fonts in TextEdit" picks "TextEdit > Show All"
+    over "Format > Font > Show Fonts" (seen live 2026-11-16)."""
+    return re.sub(rf"\b{re.escape(app)}\b", " ", text, flags=re.I)
+
+
 def _menu_action_commands(text: str) -> tuple[list[dict], str | None]:
     """App Menu Actions (docs/proposals/menu-actions.md), Slice 4: real
     execution on a confident match, still read-only-style reporting on an
@@ -343,7 +352,7 @@ def _menu_action_commands(text: str) -> tuple[list[dict], str | None]:
         menu = menu_actions.discover_menu(app)
     except menu_actions.MenuDiscoveryError:
         return [], None
-    matches = menu_actions.fuzzy_match(text, menu)
+    matches = menu_actions.fuzzy_match(_without_app_name(text, app), menu)
     if not matches:
         return [], None
     if len(matches) == 1:
