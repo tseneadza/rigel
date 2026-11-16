@@ -9,7 +9,8 @@ via Settings (⚙ → Brain). Assumes you've already completed the main
 ## Prerequisites
 
 ### For Claude
-- An Anthropic API key.
+- An Anthropic API key, saved in your macOS login Keychain as
+  `rigel-anthropic-key` (Step 2).
 - **Check for a stray `ANTHROPIC_BASE_URL`** in the shell that launches the
   sidecar — if it's set (e.g. by another local tool), `anthropic.
   Anthropic()` will silently route Claude calls there instead of the real
@@ -48,12 +49,25 @@ cd rigel
 ./.venv/bin/python -c "import anthropic, psutil; print('ok')"
 ```
 
-### Step 2 (Claude only): export your key
+### Step 2 (Claude only): save your key in the Keychain
+Copy the key to the clipboard, then run this. It stores the key without it
+appearing on screen, in your shell history or in `ps`:
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+k=$(pbpaste); printf 'add-generic-password -U -s rigel-anthropic-key -a "$USER" -w "%s"\n' "$k" | security -i; unset k
 ```
-Do this in the **same shell** you'll launch the sidecar from — Rigel never
-stores this key; it's read from the environment on every Claude call.
+Or use **Keychain Access → File → New Password Item** with *Keychain Item
+Name* `rigel-anthropic-key`. Restart the sidecar afterwards; it caches the key
+after the first read (`sidecar/keychain.py`).
+
+Check it (prints only where the key came from, never the key):
+```bash
+curl -s 127.0.0.1:5140/api/rigel/settings/llm-options | grep -o '"api_key_source":[^,}]*'
+# "api_key_source":"keychain"
+```
+
+**Fallback:** if there's no Keychain item (off-Mac, or a one-off override),
+Rigel uses `ANTHROPIC_API_KEY` from the environment of the shell that
+launched the sidecar.
 
 ### Step 3 (Ollama only, if a custom port/host): point Rigel at it
 Rigel defaults to `http://localhost:11434` (Ollama's stock port), but
@@ -87,7 +101,9 @@ INFO:     Uvicorn running on http://127.0.0.1:5140
 ## Configuration Reference
 ```bash
 # Claude
-ANTHROPIC_API_KEY=sk-ant-...       # required; never stored by Rigel
+# Key: Keychain item `rigel-anthropic-key` (see Step 2). Env vars are fallbacks.
+RIGEL_KEYCHAIN_SERVICE=rigel-anthropic-key  # optional: use a different Keychain item
+ANTHROPIC_API_KEY=sk-ant-...       # fallback only, if no Keychain item
 ANTHROPIC_BASE_URL=                # leave unset unless you intend a proxy
 
 # Ollama (all optional — auto-detected/derived if unset)

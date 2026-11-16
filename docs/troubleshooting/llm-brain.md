@@ -51,26 +51,31 @@ Ollama, which doesn't recognize model IDs like `claude-sonnet-5` → 404.
 **Symptoms:** `Claude brain failed (Claude credentials not configured: ...
 Could not resolve authentication method ...); falling back to stub.`
 
-**Diagnosis:**
+**Diagnosis:** Rigel looks in the Keychain first, then the environment.
 ```bash
-echo "${#ANTHROPIC_API_KEY}"   # 0 means unset in THIS shell
+security find-generic-password -s rigel-anthropic-key >/dev/null && echo found || echo missing
+curl -s 127.0.0.1:5140/api/rigel/settings/llm-options | grep -o '"api_key_source":[^,}]*'
 ```
-Note: this must be checked in the exact shell/process that launched the
-sidecar. A key exported in your interactive terminal is NOT automatically
-visible to a sidecar started some other way (a background job, a
-different terminal app, a GUI-launched process) — env vars don't cross
-that boundary on macOS/Linux/Windows alike.
+`missing` means there's no Keychain item under that exact name (check the
+*service* / "Keychain Item Name", not the account). If you set
+`RIGEL_KEYCHAIN_SERVICE`, look up that name instead.
 
-**Solutions:**
+**Solutions:** save the key (copy it to the clipboard first), then restart
+the sidecar. The key is cached after the first read, so a key added or
+rotated while the sidecar is running isn't seen until a restart.
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
-./.venv/bin/python -m sidecar   # restart from the SAME shell
+k=$(pbpaste); printf 'add-generic-password -U -s rigel-anthropic-key -a "$USER" -w "%s"\n' "$k" | security -i; unset k
 ```
+The env-var fallback (`ANTHROPIC_API_KEY`) still works, but only in the
+exact shell that launched the sidecar.
 
-### Issue: Settings shows `api_key_configured: false` but you know a key is set
-**Cause:** same as above — the sidecar process doesn't see the env var
-your interactive shell has. Restart the sidecar from a shell where
-`echo $ANTHROPIC_API_KEY` actually prints something.
+### Issue: Settings says there's no API key but you know one is saved
+**Cause:** usually one of: the Keychain item has a different name than
+`rigel-anthropic-key`; it's in a keychain other than *login*; or the
+sidecar was started before the item was saved (restart it). The first time
+the sidecar reads the item, macOS may ask to allow access — choose
+**Always Allow**, or the read fails silently and Rigel falls back to the
+environment.
 
 ### Issue: Ollama shows `installed: false` in Settings
 **Diagnosis:**

@@ -139,6 +139,11 @@ for a first LLM slice; streaming is a noted future enhancement.
   ANTHROPIC_API_KEY=...`, and matches the Anthropic SDK's own recommended
   credential resolution order. Settings shows configured/not-configured
   status instead of a key-entry field.
+  *Update 2026-11-15:* the key now lives in the macOS login Keychain
+  (item `rigel-anthropic-key`, read by `sidecar/keychain.py` and passed
+  straight to the client), with `ANTHROPIC_API_KEY` kept as a fallback. Still
+  never stored by Rigel itself. Settings reports the source (Keychain /
+  environment).
 
 - **Hardcoded Ollama model catalog vs. live `/api/tags` probing:** Chose
   live probing. A hardcoded list of "recommended local models" goes stale

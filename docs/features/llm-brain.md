@@ -20,8 +20,9 @@ Click the ⚙ gear icon (top-right of the Rigel window) to open **Settings**.
 The **Brain** tab lets you choose:
 - **Basic** — the original pattern-matching stub (default, no setup).
 - **Claude** — pick from the current Claude model tiers (Opus 5 / Sonnet 5 /
-  Haiku 4.5). Requires `ANTHROPIC_API_KEY` to be set in the environment the
-  sidecar runs in; Settings shows whether it's currently configured.
+  Haiku 4.5). Reads the API key from the macOS Keychain (item
+  `rigel-anthropic-key`), falling back to `ANTHROPIC_API_KEY`; Settings
+  shows where the key came from (Keychain / environment), never the key.
 - **Ollama (local)** — Settings live-probes your local Ollama install,
   showing every model you've already pulled with its size and a
   responsiveness estimate for *this* machine (✅ fits comfortably / ⚠ may
@@ -91,9 +92,11 @@ ChatConsole ──send──▶ POST /chat ──▶ brain.respond(text, llm_con
 
 ## Configuration
 ```
-ANTHROPIC_API_KEY=sk-ant-...       # required for the Claude provider; never
-                                    # stored by Rigel — read from the
-                                    # environment at call time only.
+# Claude key: macOS Keychain item `rigel-anthropic-key` (sidecar/keychain.py),
+# read via /usr/bin/security and passed straight to the Anthropic client —
+# never logged, returned or written to disk. Fallbacks, in order:
+ANTHROPIC_API_KEY=sk-ant-...       # or ANTHROPIC_AUTH_TOKEN
+RIGEL_KEYCHAIN_SERVICE=...         # optional: a different Keychain item name
 
 # Optional — Ollama connection, auto-detected if set:
 OLLAMA_API_URL=http://localhost:12434   # takes priority if set
@@ -132,6 +135,7 @@ reply, commands = brain.respond("open Chrome and Safari", llm_config)
   - [x] Stub provider (`provider: "stub"`) still replies exactly as before — regression-checked.
   - [x] Ollama provider produces a real (non-canned) reply and a logged command intent.
   - [x] Claude provider with no `ANTHROPIC_API_KEY` falls back to the stub instead of a 500.
+  - [x] Key read from the Keychain with `ANTHROPIC_API_KEY` unset: `api_key_source: "keychain"`, live Claude calls succeed (2026-11-15/16).
   - [x] `POST /settings/llm-config` rejects an invalid provider / missing `ollama_model` with 400.
   - [x] Settings UI: Orb tab still resizes/repositions the orb from its new location.
   - [x] Settings UI: Brain tab shows live Ollama models with correct sizes and fit labels.
