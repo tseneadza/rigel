@@ -25,6 +25,20 @@ Examples:
   [Architecture](architecture/voice-pipeline.md) ·
   [API](api/voice-settings-endpoints.md) ·
   [Troubleshooting](troubleshooting/voice-pipeline.md)
+- **App Handlers** (per-app "sub-agents" — Chrome/VS Code so far — for
+  in-app actions beyond generic open/close, e.g. a new Chrome tab or a
+  folder opened in VS Code): [Feature](features/app-handlers.md) ·
+  [Architecture](architecture/app-handlers.md) ·
+  [API](api/handler-endpoints.md) ·
+  [Troubleshooting](troubleshooting/app-handlers.md) — no setup doc, no
+  new configuration beyond the existing LLM brain setup.
+- **App Menu Actions** (dynamic discovery and clicking of any running
+  app's real menu-bar items, plus a live open-apps list): [Feature](features/menu-actions.md) ·
+  [Architecture](architecture/menu-actions.md) ·
+  [API](api/menu-actions-endpoints.md) ·
+  [Troubleshooting](troubleshooting/menu-actions.md) — no setup doc beyond
+  the one-time macOS Accessibility permission grant, covered in the
+  troubleshooting doc.
 
 ## Quick Navigation
 

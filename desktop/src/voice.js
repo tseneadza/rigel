@@ -143,3 +143,15 @@ export async function onVoiceError(callback) {
   const { listen } = await import("@tauri-apps/api/event");
   return listen("voice://error", (event) => callback(event.payload));
 }
+
+/**
+ * Listen for one utterance without the wake word (used to hear a spoken
+ * yes/no for a ToolBox approval). Waits until Rigel has finished speaking,
+ * then records until a short silence and emits it as a normal
+ * voice://transcript. Rejects if voice listening isn't running.
+ */
+export async function listenOnce() {
+  if (!isTauri()) return;
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke("voice_listen_once");
+}

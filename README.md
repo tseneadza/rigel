@@ -33,6 +33,8 @@ Rigel is in its **first slice**. What works today:
 * ✅ **Deep-space look** — at full size, a solid black background with a scattered starfield and a soft nebula glow behind the orb; never transparent to the desktop. Minimized, the background goes away entirely and just the orb floats.
 * ✅ **Hotkey expand/minimize** — **⌘⇧R** toggles the orb between full size and minimized (orb-only) by hand, layered on top of the automatic minimize-while-working above. It's a true OS-level global shortcut in the native app (works even when Rigel isn't focused). See [`docs/features/orb-minimize.md`](docs/features/orb-minimize.md).
 
+* ✅ **ToolBox tools (MCP)** — the brain (Claude or a tool-capable Ollama model) can find and run tools through [ToolBox](../ToolBox), the local MCP gateway: system health, files, mail, git, weather and more. Gated tools ask on an approval card you can click or answer out loud. Steps fold into a "ToolBox · used N tools" line. See [`docs/features/toolbox.md`](docs/features/toolbox.md).
+
 Deferred to later slices (scaffolded, not yet wired):
 
 * 🔜 **Real command execution** — the OS-hook layer (open/close apps, file CRUD) runs behind approval gates. For now Rigel *detects and logs* command intents (now via a real LLM, still without executing them).
@@ -108,8 +110,10 @@ The orb appears on launch. Type to Rigel; every turn and every detected command 
 By default Rigel replies with a simple pattern-matching stub — no setup
 required. To have it reply through a real LLM instead, open Settings (⚙,
 top-right) → **Brain** tab and pick:
-* **Claude** — set `export ANTHROPIC_API_KEY=sk-ant-...` in the shell you
-  launch the sidecar from, then pick a model in Settings.
+* **Claude** — on macOS, save your key in the Keychain as `rigel-anthropic-key`
+  (see `sidecar/keychain.py` for a one-liner that keeps it off screen); or set
+  `export ANTHROPIC_API_KEY=sk-ant-...` in the shell you launch the sidecar
+  from. Then pick a model in Settings.
 * **Ollama (local)** — [install Ollama](https://ollama.com), pull a model
   (`ollama pull llama3.2:3b`), then pick it in Settings — it's live-probed
   against your machine's actual RAM so you can see which models will
@@ -149,6 +153,9 @@ rigel/
     ├── app.py            routes: /chat /state /logs /health /settings/{orb,llm,voice}-config
     ├── brain.py          reply + command-intent dispatch (stub or LLM)
     ├── llm_providers.py  Claude + Ollama backends, hardware/availability probing
+    ├── tool_brain.py     ToolBox tool-use loop (Claude + Ollama)
+    ├── toolbox_client.py MCP client for ToolBox (clientInfo "rigel")
+    ├── approvals.py      ToolBox approvals: card + spoken yes/no
     └── db.py             SQLite store: turns, command_attempts, settings
 ```
 

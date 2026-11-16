@@ -23,6 +23,8 @@ from typing import Any
 import anthropic
 import psutil
 
+from sidecar.handlers.base import AppHandler
+
 logger = logging.getLogger(__name__)
 
 
@@ -38,7 +40,7 @@ def _default_ollama_host() -> str:
         if bind_host in ("", "0.0.0.0", "::"):
             bind_host = "localhost"  # a bind address isn't a connectable client target
         return f"http://{bind_host}:{port}" if port else f"http://{bind_host}"
-    return "http://localhost:11434"
+    return "http://localhost:12434"
 
 
 DEFAULT_OLLAMA_HOST = _default_ollama_host()
@@ -99,6 +101,16 @@ RESPONSE_SCHEMA = {
 }
 
 
+def anthropic_client() -> "anthropic.Anthropic":
+    """Anthropic client using the key from the macOS Keychain (see
+    ``keychain.py``); falls back to the SDK's own env lookup when there's
+    no Keychain entry."""
+    from sidecar import keychain
+
+    key = keychain.anthropic_key()
+    return anthropic.Anthropic(api_key=key) if key else anthropic.Anthropic()
+
+
 class LLMError(Exception):
     """Raised when a provider can't produce a (reply, commands) pair."""
 
@@ -138,16 +150,16 @@ def _parse_response_json(raw: str) -> tuple[str, list[dict]]:
 
 # ── Claude ───────────────────────────────────────────────────────────────
 
-def claude_respond(text: str, model: str) -> tuple[str, list[dict]]:
+def claude_respond(text: str, model: str, extra_system: str = "") -> tuple[str, list[dict]]:
     if model not in CLAUDE_MODELS:
         raise LLMError(f"unknown Claude model: {model!r}")
 
     try:
-        client = anthropic.Anthropic()
+        client = anthropic_client()
         response = client.messages.create(
             model=model,
             max_tokens=1024,
-            system=SYSTEM_PROMPT,
+            system=SYSTEM_PROMPT + extra_system,
             messages=[{"role": "user", "content": text}],
             output_config={"format": {"type": "json_schema", "schema": RESPONSE_SCHEMA}},
         )
@@ -168,6 +180,69 @@ def claude_respond(text: str, model: str) -> tuple[str, list[dict]]:
     return _parse_response_json(raw)
 
 
+def claude_app_action(text: str, model: str, handler: AppHandler) -> list[dict]:
+    """Ask ``handler``'s own scoped Claude call to turn ``text`` into zero or
+    one ``app_action`` command intents.
+
+    Unlike ``claude_respond``, this doesn't produce a reply — ``brain.py``
+    already has one from the shared four-verb pass. This call exists purely
+    to let a handler's own tool vocabulary (which ``respond``'s fixed
+    ``RESPONSE_SCHEMA`` knows nothing about) decide whether the utterance
+    maps to one of *its* actions, using real Claude tool-use rather than the
+    JSON-schema trick ``RESPONSE_SCHEMA`` relies on — each handler's
+    ``tools`` list varies, so a single shared schema can't describe it.
+    """
+    if model not in CLAUDE_MODELS:
+        raise LLMError(f"unknown Claude model: {model!r}")
+
+    try:
+        client = anthropic_client()
+        response = client.messages.create(
+            model=model,
+            max_tokens=512,
+            system=handler.system_prompt,
+            tools=handler.tools,
+            tool_choice={"type": "auto"},
+            messages=[{"role": "user", "content": text}],
+        )
+    except anthropic.AuthenticationError as e:
+        raise LLMError(f"Claude authentication failed: {e}") from e
+    except anthropic.RateLimitError as e:
+        raise LLMError(f"Claude rate limited: {e}") from e
+    except anthropic.APIConnectionError as e:
+        raise LLMError(f"Claude connection error: {e}") from e
+    except anthropic.APIStatusError as e:
+        raise LLMError(f"Claude API error ({e.status_code}): {e.message}") from e
+    except TypeError as e:
+        raise LLMError(f"Claude credentials not configured: {e}") from e
+
+    commands = []
+    for block in response.content:
+        if block.type == "tool_use":
+            commands.append({
+                "action": "app_action",
+                "args": {"app_id": handler.app_id, "tool": block.name, "tool_args": block.input},
+            })
+    return commands
+
+
+def claude_json(prompt: str, model: str, schema: dict) -> str:
+    """One structured-output Claude call; returns the raw JSON text. Used for
+    small classification jobs (approvals.interpret)."""
+    if model not in CLAUDE_MODELS:
+        raise LLMError(f"unknown Claude model: {model!r}")
+    try:
+        response = anthropic_client().messages.create(
+            model=model,
+            max_tokens=200,
+            messages=[{"role": "user", "content": prompt}],
+            output_config={"format": {"type": "json_schema", "schema": schema}},
+        )
+    except (anthropic.APIError, TypeError) as e:
+        raise LLMError(f"Claude call failed: {e}") from e
+    return next((b.text for b in response.content if b.type == "text"), "")
+
+
 # ── Ollama ───────────────────────────────────────────────────────────────
 
 def _ollama_request(host: str, path: str, body: dict | None, timeout: float) -> dict[str, Any]:
@@ -181,7 +256,8 @@ def _ollama_request(host: str, path: str, body: dict | None, timeout: float) -> 
         return json.loads(resp.read().decode("utf-8"))
 
 
-def ollama_respond(text: str, model: str, host: str = DEFAULT_OLLAMA_HOST) -> tuple[str, list[dict]]:
+def ollama_respond(text: str, model: str, host: str = DEFAULT_OLLAMA_HOST,
+                   extra_system: str = "") -> tuple[str, list[dict]]:
     schema_hint = (
         "Respond with ONLY a JSON object of the exact shape "
         '{"reply": "<string>", "commands": [{"action": '
@@ -194,7 +270,7 @@ def ollama_respond(text: str, model: str, host: str = DEFAULT_OLLAMA_HOST) -> tu
         "stream": False,
         "format": "json",
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT + " " + schema_hint},
+            {"role": "system", "content": SYSTEM_PROMPT + extra_system + " " + schema_hint},
             {"role": "user", "content": text},
         ],
     }
@@ -215,6 +291,17 @@ def ollama_respond(text: str, model: str, host: str = DEFAULT_OLLAMA_HOST) -> tu
     return _parse_response_json(raw)
 
 
+def ollama_json(prompt: str, model: str, host: str = DEFAULT_OLLAMA_HOST) -> str:
+    """One JSON-mode Ollama call; returns the raw JSON text."""
+    body = {"model": model, "stream": False, "format": "json",
+            "messages": [{"role": "user", "content": prompt}]}
+    try:
+        result = _ollama_request(host, "/api/chat", body, timeout=30.0)
+    except (urllib.error.URLError, TimeoutError) as e:
+        raise LLMError(f"Ollama unreachable at {host}: {e}") from e
+    return (result.get("message") or {}).get("content", "")
+
+
 # ── System / hardware probing ───────────────────────────────────────────
 
 def system_ram_gb() -> float:
@@ -222,7 +309,14 @@ def system_ram_gb() -> float:
 
 
 def claude_api_key_configured() -> bool:
-    return bool(os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"))
+    return claude_api_key_source() is not None
+
+
+def claude_api_key_source() -> str | None:
+    """'keychain', 'env' or None — never the key."""
+    from sidecar import keychain
+
+    return keychain.anthropic_key_source()
 
 
 def _fit_label(model_gb: float, ram_gb: float) -> str:
