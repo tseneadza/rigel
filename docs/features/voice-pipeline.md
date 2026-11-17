@@ -38,6 +38,15 @@ speech. No accounts, no network calls, no audio leaves the machine.
   [`docs/mockups/voice-picker-v1.html`](../mockups/voice-picker-v1.html).
 - **No saved voice = Samantha**, not the macOS system voice, so every reply
   sounds the same whatever System Settings says.
+- **Warm voice treatment.** When ffmpeg is installed (Homebrew, at
+  `/opt/homebrew/bin` or `/usr/local/bin`), every reply is rendered by `say`
+  at 178 wpm, passed through `WARM_FILTER` in `src/voice/tts.rs` (softens
+  the tinny 3.5/7 kHz bands, adds body at 200 Hz, a faint room, gentle
+  compression), then played with `afplay`. Chosen by ear from
+  [`docs/mockups/voice/h2-warm.wav`](../mockups/voice/h2-warm.wav). Without
+  ffmpeg, or if rendering fails, Rigel falls back to plain `say`. It adds
+  a short render delay before speech starts. Applies to every voice, not
+  just Samantha; there's no Settings toggle yet.
 
 ## Technical Implementation
 
@@ -59,7 +68,8 @@ mic (cpal, native rate) ──► rustpotter (wake-word DTW match, own VAD gate)
                      App.jsx ──► sendChat(text) ──► sidecar /api/rigel/chat (unchanged)
                                    │ reply
                                    ▼  Tauri command voice_speak
-                     /usr/bin/say  ──► speech gate mutes the listener until done + 0.7 s
+                     say -o → ffmpeg WARM_FILTER → afplay  (plain say if no ffmpeg)
+                                   ──► speech gate mutes the listener until done + 0.7 s
 ```
 
 ### Key Components
@@ -67,7 +77,7 @@ mic (cpal, native rate) ──► rustpotter (wake-word DTW match, own VAD gate)
   record → transcribe state machine), `voice/enroll.rs` (records and
   silence-trims the wake-word samples, builds `~/.rigel/wakeword.rpw`),
   `voice/stt.rs` (whisper model download + transcription + non-speech
-  filter), `voice/tts.rs` (`say` wrapper, emits `speaking`/`idle`),
+  filter), `voice/tts.rs` (`say` + ffmpeg warm-filter wrapper, emits `speaking`/`idle`),
   `voice/capture.rs` (one-shot recording for enrollment), `voice/mod.rs`
   (enable/disable commands + the TTS↔listener speech gate).
 - **Frontend:** `desktop/src/voice.js` (typed wrappers for every voice

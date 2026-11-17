@@ -1,6 +1,6 @@
-//! Text-to-speech via macOS's built-in `say`. No new dependencies, no
-//! network — matches the "local execution engine" ethos and gives Rigel a
-//! spoken voice with zero setup.
+//! Text-to-speech via macOS's built-in `say`, shaped by an ffmpeg "warm"
+//! filter when ffmpeg is installed (plain `say` otherwise). No network —
+//! matches the "local execution engine" ethos.
 
 use std::process::{Child, Command};
 use std::sync::{Arc, Mutex};
@@ -44,8 +44,7 @@ pub fn voice_speak(
     let voice = voice
         .filter(|v| !v.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_VOICE.to_string());
-    let mut cmd = Command::new("/usr/bin/say");
-    cmd.arg("-v").arg(&voice).arg(&text);
+    let mut cmd = speak_command(&text, &voice, find_ffmpeg());
 
     // Deafen the wake-word listener *before* audio starts coming out of the
     // speakers, not after.
@@ -100,6 +99,66 @@ pub fn voice_stop_speaking(app: AppHandle, state: State<TtsState>) -> Result<(),
     stop_current(&state);
     let _ = app.emit("voice://state", serde_json::json!({ "state": "idle" }));
     Ok(())
+}
+
+/// Speaking rate (words per minute) for Rigel's voice: a touch quicker than
+/// `say`'s default so replies sound conversational rather than read out.
+pub const SPEAK_RATE: &str = "178";
+
+/// Rigel's "warm" voice treatment (chosen by ear from the mockups in
+/// docs/mockups/voice/, sample h2-warm): trims rumble, adds body around
+/// 200 Hz, softens the tinny 3.5 kHz and 7 kHz bands that make `say` sound
+/// synthetic, adds a very faint room, and gently evens out loudness. Every
+/// stage stays inside the 80 Hz–9 kHz speech band.
+pub const WARM_FILTER: &str = "highpass=f=80,\
+equalizer=f=200:t=q:w=1:g=3,\
+equalizer=f=3500:t=q:w=1.5:g=-3,\
+equalizer=f=7000:t=q:w=1:g=-4,\
+lowpass=f=9000,\
+aecho=0.9:0.3:18|31:0.07|0.05,\
+acompressor=threshold=0.2:ratio=2:attack=10:release=150,\
+volume=1.4";
+
+/// ffmpeg isn't part of macOS, and a GUI app's PATH doesn't include Homebrew,
+/// so look in the usual install locations directly.
+fn find_ffmpeg() -> Option<&'static str> {
+    ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"]
+        .into_iter()
+        .find(|p| std::path::Path::new(p).exists())
+}
+
+/// Builds the process that speaks `text`. With ffmpeg available: `say`
+/// renders to a temp file, ffmpeg applies WARM_FILTER, and the shell then
+/// `exec`s afplay, so the spawned child *is* the player and killing it stops
+/// the audio. Without ffmpeg: plain `say`, exactly as before. Text, voice
+/// and paths travel as positional arguments, never spliced into the script.
+fn speak_command(text: &str, voice: &str, ffmpeg: Option<&str>) -> Command {
+    let Some(ffmpeg) = ffmpeg else {
+        let mut cmd = Command::new("/usr/bin/say");
+        cmd.arg("-v").arg(voice).arg("-r").arg(SPEAK_RATE).arg(text);
+        return cmd;
+    };
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let dir = std::env::temp_dir();
+    let stem = format!("rigel-tts-{}-{n}", std::process::id());
+    let raw = dir.join(format!("{stem}.aiff"));
+    let out = dir.join(format!("{stem}.wav"));
+    // $1 text, $2 voice, $3 rate, $4 raw, $5 out, $6 ffmpeg, $7 filter, $8 tmp dir.
+    // Clears earlier utterances' leftovers first (the previous player has
+    // already been killed by stop_current), and falls back to plain `say` if
+    // rendering fails so Rigel is never silent.
+    let script = r#"find "$8" -maxdepth 1 -name 'rigel-tts-*' ! -name "$(basename "$4")" ! -name "$(basename "$5")" -delete 2>/dev/null
+/usr/bin/say -v "$2" -r "$3" -o "$4" -- "$1" \
+  && "$6" -y -loglevel error -i "$4" -af "$7" "$5" \
+  && rm -f "$4" && exec /usr/bin/afplay "$5"
+rm -f "$4" "$5"
+exec /usr/bin/say -v "$2" -r "$3" -- "$1""#;
+    let mut cmd = Command::new("/bin/sh");
+    cmd.arg("-c").arg(script).arg("sh")
+        .arg(text).arg(voice).arg(SPEAK_RATE)
+        .arg(&raw).arg(&out).arg(ffmpeg).arg(WARM_FILTER).arg(&dir);
+    cmd
 }
 
 /// Rigel's default voice: Samantha, macOS's original English voice. It ships
@@ -282,6 +341,69 @@ Ava (Enhanced)      en_US    # Hello! My name is Ava.
                 assert!(st.success(), "say failed for {name}");
             }
         }
+    }
+
+    fn args(cmd: &Command) -> Vec<String> {
+        cmd.get_args().map(|a| a.to_string_lossy().into_owned()).collect()
+    }
+
+    #[test]
+    fn plain_say_when_no_ffmpeg() {
+        let cmd = speak_command("Hi Tony", "Samantha", None);
+        assert_eq!(cmd.get_program(), "/usr/bin/say");
+        assert_eq!(args(&cmd), ["-v", "Samantha", "-r", SPEAK_RATE, "Hi Tony"]);
+    }
+
+    #[test]
+    fn warm_chain_passes_text_as_an_argument_not_script() {
+        let nasty = "it's \"$(rm -rf ~)\"; done";
+        let cmd = speak_command(nasty, "Samantha", Some("/opt/homebrew/bin/ffmpeg"));
+        assert_eq!(cmd.get_program(), "/bin/sh");
+        let a = args(&cmd);
+        assert!(!a[1].contains(nasty), "text must not be spliced into the script");
+        assert_eq!(&a[3..6], [nasty, "Samantha", SPEAK_RATE]);
+        assert!(a[6].ends_with(".aiff") && a[7].ends_with(".wav"));
+        assert_eq!(a[9], WARM_FILTER);
+        assert!(a[1].contains("exec /usr/bin/afplay"), "player must replace the shell");
+    }
+
+    #[test]
+    fn warm_filter_stays_in_speech_band() {
+        assert!(WARM_FILTER.starts_with("highpass=f=80,"));
+        assert!(WARM_FILTER.contains("lowpass=f=9000"));
+        assert!(!WARM_FILTER.contains(' '), "ffmpeg -af takes one unbroken chain");
+    }
+
+    /// Speaks through the real warm chain on this Mac. Listen for it.
+    /// Run: cargo test --lib -- --ignored --nocapture live_warm
+    #[test]
+    #[ignore]
+    fn live_warm_chain_speaks() {
+        let ff = find_ffmpeg().expect("ffmpeg installed");
+        let st = speak_command("Hello, Tony. This is Rigel's warm voice.", DEFAULT_VOICE, Some(ff))
+            .status().unwrap();
+        assert!(st.success());
+    }
+
+    /// Interrupting a warm reply must stop the audio: the killed child has to
+    /// be afplay itself, not a shell that leaves the player running.
+    /// Run: cargo test --lib -- --ignored --nocapture live_warm_interrupt
+    #[test]
+    #[ignore]
+    fn live_warm_interrupt_stops_audio() {
+        let ff = find_ffmpeg().expect("ffmpeg installed");
+        let mut child = speak_command(
+            "This is a long sentence that should be cut off partway through, well before it finishes.",
+            DEFAULT_VOICE, Some(ff)).spawn().unwrap();
+        std::thread::sleep(Duration::from_millis(2500));
+        let pid = child.id().to_string();
+        child.kill().unwrap();
+        child.wait().unwrap();
+        std::thread::sleep(Duration::from_millis(300));
+        let left = Command::new("/bin/ps").args(["-p", &pid]).output().unwrap();
+        assert!(!String::from_utf8_lossy(&left.stdout).contains(&pid), "player still alive");
+        let players = Command::new("/usr/bin/pgrep").arg("afplay").output().unwrap();
+        assert!(players.stdout.is_empty(), "orphaned afplay still playing");
     }
 
     #[test]
