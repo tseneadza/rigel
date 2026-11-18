@@ -208,7 +208,7 @@ def respond_with_tools(text: str, llm_config: dict | None, toolbox_config: dict 
             out["toolbox"] = {"state": "used" if steps else "available"}
             out["tool_steps"] = [s.public() for s in steps]
             if provider == "claude":
-                commands = commands + _app_commands(text, llm_config)
+                commands = _with_app_commands(commands, text, llm_config)
     elif enabled:
         out["toolbox"] = {"state": "unsupported",
                           "detail": f"{provider} can't use tools" if provider != "ollama"
@@ -243,7 +243,7 @@ def _respond_via_provider(text: str, llm_config: dict | None, extra_system: str 
         except llm_providers.LLMError as e:
             logger.warning("Claude brain failed (%s); falling back to stub.", e)
         else:
-            return reply, commands + _app_commands(text, llm_config)
+            return reply, _with_app_commands(commands, text, llm_config)
     elif provider == "ollama":
         try:
             return llm_providers.ollama_respond(
@@ -272,6 +272,27 @@ def _running_apps_reply(text: str) -> str | None:
     if not apps:
         return "I couldn't find any open apps."
     return "Open apps: " + ", ".join(apps) + "."
+
+
+def _with_app_commands(commands: list[dict], text: str, llm_config: dict) -> list[dict]:
+    """``commands`` plus any per-app handler commands for ``text``. When a
+    handler claims the turn, a generic ``open_app`` for that same app is
+    dropped: every handler action already launches or focuses its app, so
+    "open a new Chrome tab to github.com" was asking for two approvals
+    (``open_app Chrome`` + ``chrome.new_tab``; seen live 2026-11-16). Only
+    ``open_app`` is dropped — anything else the brain proposed is kept."""
+    app_commands = _app_commands(text, llm_config)
+    if not app_commands:
+        return commands
+    claimed = {c["args"].get("app_id") for c in app_commands if c.get("action") == "app_action"}
+
+    def redundant(c: dict) -> bool:
+        if c.get("action") != "open_app":
+            return False
+        handler = registry.match(str(c.get("args", {}).get("target", "")))
+        return handler is not None and handler.app_id in claimed
+
+    return [c for c in commands if not redundant(c)] + app_commands
 
 
 def _app_commands(text: str, llm_config: dict) -> list[dict]:
