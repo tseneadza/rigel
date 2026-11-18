@@ -26,7 +26,7 @@ const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
  *   state           — "idle" | "recording" | "thinking" | "speaking" (default "idle")
  *   caption         — short line under the orb (default "Standing by.")
  *   diameterPx      — fixed diameter in pixels, or undefined for responsive (default undefined)
- *   positionCorner  — "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right" | "custom" (default "center")
+ *   positionCorner  — "center" | "top-left" | "top-right" | "bottom-left" | "bottom-right" | "docked" | "custom" (default "center"; "docked" = small orb in the bottom-right corner of the stage, for non-chat views)
  *   positionXPct    — left offset as a % of the window, used when positionCorner is "custom"
  *   positionYPct    — top offset as a % of the window, used when positionCorner is "custom"
  *   isMinimized     — hide caption if true; also switches dragging to move the

@@ -50,3 +50,26 @@ Read this first at the start of every Rigel session. Newest entry on top.
 - The `voice-pipeline-integrity` skill references files that don't exist in
   this repo (`stt_config.toml`, `rigel-voice-test` bin, `VOICE_CONFIG.md`);
   worth rewriting to match the real `src/voice/` layout.
+
+## P1 verification (View Screens, feature/rigel-view-screens)
+
+- Ran sidecar + Vite dev server on the Mac, checked http://localhost:1425/ in Chrome.
+- Header view dropdown works: Agent Chat / Toolbox / Presentation. Switching shows the ViewArea placeholders. Console: no errors.
+- Brain chip renders bottom-right with "Ollama · dutchit/minimax-h3-prompt-enhancer:latest · Local".
+- BUG: docked orb (Toolbox, Presentation) sits at the top-right, overlapping the header. Cause: `.rigel-orb[data-position="bottom-right"]` uses `bottom: 160px`, which was tuned for the full-height resting layout. In docked mode `.stage` is ~277 px tall, so the offset lands at the top. Fix idea: a docked-specific bottom offset (about 14 px, aligned with the brain chip) and the chip stacked above the orb, per mockup M1. Needs Tony's OK on the layout before changing.
+- Open: M1 shows the docked orb in Agent Chat, but FR-9 says docked only for non-chat views (P1 follows FR-9). FR-31 and FR-32 are not implemented.
+- Verify: take a screenshot at 1140x581, select Toolbox, and check that `.rigel-orb` bottom edge is above the footer and not over the header.
+
+## P1 change: brain chip shows on orb hover (mockup v9 approved)
+
+- `desktop/src/styles.css`: the brain chip is hidden (opacity 0, 0.2s fade) until `.rigel-orb` is hovered. Rule: `.stage:not(:has(.rigel-orb:hover)) .brain-chip`.
+- `vite build` passes. In the browser, the chip showed on orb hover and hid when the pointer left (computed opacity 1 and 0).
+- Still open: the docked orb sits at the top right, over the header (see the P1 verification note above). Layout fix needs Tony's OK.
+- Not committed. Commit on `feature/rigel-view-screens` only when Tony asks.
+
+## P1 fix: docked orb placement (resolved)
+
+- Added `positionCorner="docked"` (App.jsx passes it for non-chat views). CSS: `.rigel-orb[data-position="docked"]` at bottom 14px, right 18px. Brain chip stacked above it at `bottom: 190px` (M1 layout).
+- Measured in the browser (Toolbox view): orb y 195–356, header ends at y 66, so no overlap. Chip y 155–180, above the orb. Hovering the orb shows the chip.
+- `vite build` passes. Not committed.
+- Still open: FR-31 (fallback state) and FR-32 (click chip → Settings) are deferred; M1 vs FR-9 (docked only for non-chat views) is still to confirm with Tony.

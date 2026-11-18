@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import RigelOrb from "./components/RigelOrb.jsx";
 import ChatConsole from "./components/ChatConsole.jsx";
 import SettingsPanel from "./components/SettingsPanel.jsx";
+import BrainChip from "./components/BrainChip.jsx";
+import ViewArea from "./components/ViewArea.jsx";
 import RunningApps from "./components/RunningApps.jsx";
 import {
   getLogs,
@@ -46,6 +48,13 @@ const MINIMIZED_WINDOW_MARGIN_PX = 40;
 // a second, and shrinking/restoring the OS window for that reads as the
 // window vanishing and popping back. The shrink is for genuinely long work.
 const WORKING_MINIMIZE_DELAY_MS = 2500;
+// Main-view choices (PRD v6 FR-1). Non-chat views dock the orb at this size.
+const VIEWS = [
+  { id: "chat", label: "Agent Chat" },
+  { id: "toolbox", label: "Toolbox" },
+  { id: "presentation", label: "Presentation" },
+];
+const DOCKED_DIAMETER_PX = 120;
 
 export default function App() {
   const [turns, setTurns] = useState([]);
@@ -54,6 +63,7 @@ export default function App() {
   const [online, setOnline] = useState(null); // null = unknown, true/false once probed
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [manualMinimize, setManualMinimize] = useState(false);
+  const [activeView, setActiveView] = useState("chat");
   const [orbConfig, setOrbConfig] = useState({
     diameter_px: 620,
     min_diameter_px: DEFAULT_MIN_DIAMETER_PX,
@@ -361,6 +371,13 @@ export default function App() {
   const displayCorner = minimized ? "center" : orbConfig.position_corner;
   const displayXPct = minimized ? null : orbConfig.x_pct;
   const displayYPct = minimized ? null : orbConfig.y_pct;
+  // Non-chat views dock the orb in the bottom-right corner inside the normal-size
+  // window; no OS-window shrink (PRD v6 FR-9). Minimizing still shrinks the window.
+  const docked = activeView !== "chat" && !minimized;
+  const orbDiameter = docked ? DOCKED_DIAMETER_PX : displayDiameter;
+  const orbCorner = docked ? "docked" : displayCorner;
+  const orbX = docked ? null : displayXPct;
+  const orbY = docked ? null : displayYPct;
 
   // Shrink the real OS window (not just the CSS orb) down to a small
   // borderless square while minimized, and restore it once expanded again.
@@ -390,6 +407,11 @@ export default function App() {
         <header className="brandline" data-tauri-drag-region>
           <span className="brand">RIGEL</span>
           <span className="brand-sub">Really Intelligent Graphical Execution Layer</span>
+          <select className="view-select" aria-label="Main view" value={activeView} onChange={(e) => setActiveView(e.target.value)}>
+            {VIEWS.map((v) => (
+              <option key={v.id} value={v.id}>{v.label}</option>
+            ))}
+          </select>
           <RunningApps />
           {toolboxStatus && toolboxStatus.state !== "disabled" && (
             <span
@@ -417,14 +439,16 @@ export default function App() {
         <RigelOrb
           state={orbState}
           caption={caption}
-          diameterPx={displayDiameter}
-          positionCorner={displayCorner}
-          positionXPct={displayXPct}
-          positionYPct={displayYPct}
+          diameterPx={orbDiameter}
+          positionCorner={orbCorner}
+          positionXPct={orbX}
+          positionYPct={orbY}
           isMinimized={minimized || orbConfig.is_minimized}
           onDrag={handleOrbDrag}
           onMinimizedDrag={handleMinimizedDrag}
         />
+        {activeView !== "chat" && <ViewArea view={activeView} />}
+        {!minimized && <BrainChip />}
       </main>
 
       {/* Kept mounted (just hidden) while minimized so an in-flight send isn't torn down mid-request. */}
