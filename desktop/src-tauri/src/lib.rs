@@ -18,6 +18,7 @@ pub fn run() {
       voice::voice_set_enabled,
       voice::voice_is_enabled,
       voice::voice_listen_once,
+      voice::voice_set_wake_word_muted,
     ])
     .setup(|app| {
       // Logging is on in release builds too: the voice pipeline can only be

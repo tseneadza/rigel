@@ -68,6 +68,20 @@ pub fn take_listen_once() -> bool {
     LISTEN_ONCE.swap(false, Ordering::SeqCst)
 }
 
+/// "Rigel's ears" muted (P2, FR-18). Silences only the wake word: a ToolBox
+/// approval can still be answered by voice (listen-once above). The desktop
+/// UI sets it, and syncs it from the sidecar setting on launch.
+static WAKE_WORD_MUTED: AtomicBool = AtomicBool::new(false);
+
+pub fn wake_word_muted() -> bool {
+    WAKE_WORD_MUTED.load(Ordering::SeqCst)
+}
+
+#[tauri::command]
+pub fn voice_set_wake_word_muted(muted: bool) {
+    WAKE_WORD_MUTED.store(muted, Ordering::SeqCst);
+}
+
 /// Holds the running listener thread's stop handle, if voice is enabled.
 #[derive(Default)]
 pub struct ListenerState(pub Mutex<Option<listener::ListenerHandle>>);
@@ -99,4 +113,17 @@ pub fn voice_listen_once(state: State<ListenerState>) -> Result<(), String> {
     }
     LISTEN_ONCE.store(true, Ordering::SeqCst);
     Ok(())
+}
+
+#[cfg(test)]
+mod wake_mute_tests {
+    use super::*;
+
+    #[test]
+    fn wake_word_mute_flag_round_trips() {
+        voice_set_wake_word_muted(true);
+        assert!(wake_word_muted());
+        voice_set_wake_word_muted(false);
+        assert!(!wake_word_muted());
+    }
 }

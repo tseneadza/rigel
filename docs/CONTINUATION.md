@@ -4,6 +4,23 @@ Read this first at the start of every Rigel session. Newest entry on top.
 
 ---
 
+## P2 checkpoint: sidecar + history (2026-11-20)
+
+Done (not committed yet; branch `feature/rigel-view-screens-p2`):
+- `sidecar/db.py`: `conversations` table; `turns.conversation_id` added with a backfill into one default conversation; backup before the first ALTER when turns exist; helpers `start_new_conversation`, `active_conversation_id`, `list_conversations`, `conversation_turns`, `conversation_history`.
+- `sidecar/app.py`: `GET/POST /api/rigel/settings/mic-wake-word` (`{enabled}` under key `mic_wake_word_enabled`, default on); `GET /api/rigel/conversations`; `POST /api/rigel/conversations/new`; `GET /api/rigel/conversations/{id}/turns`. `/chat` now passes the active conversation's earlier turns to the brain.
+- History to the model (Tony's answer 1, 2026-11-20): `history` threaded through `brain.respond_with_tools`, `tool_brain.respond` (Claude and Ollama loops), and `llm_providers.claude_respond` / `ollama_respond` via `with_history`.
+- `desktop/src/api.js`: client functions for mute and conversations.
+- `docs/mockups/mockup-v10-new-chat.html` copied from the vault (approved).
+
+Tests: `sidecar/tests/test_db_conversations.py`, 6 tests pass when run with a stub pytest import in the Linux VM. Pytest itself, and the LLM paths, have NOT run; FastAPI and anthropic are not installed in the VM. Run `.venv/bin/python -m pytest` on the Mac.
+
+Not done yet:
+- Desktop UI BUILT (not run): `components/ConversationControls.jsx` (mute with slash, "+" New Chat, History), `components/HistoryPanel.jsx` (read-only past chats), wired into `App.jsx`, styles appended to `styles.css`, tests in `src/__tests__/ConversationControls.test.jsx`. The Vite build and vitest could NOT run in the Linux VM (node_modules from the Mac; rollup native binary missing). Run `npx vite build` and `npm test` on the Mac.
+- Rust mute BUILT (not compiled): `voice/mod.rs` `WAKE_WORD_MUTED` flag + `voice_set_wake_word_muted` command + unit test; `voice/listener.rs` skips wake-word matching when muted, after the listen-once path so approvals still work; `lib.rs` registers the command; `src/voice.js` `setWakeWordMuted`; App syncs it on launch and on toggle. Run `cargo test` in `desktop/src-tauri` on the Mac (no cargo in the Linux VM). Known gap: a recording already started before muting still finishes and is sent.
+- Gates on the Mac: `npx vite build`, `npm test`, pytest.
+- Commit. Git lock files from an earlier commit still need the delete approval.
+
 ## P2 ready to cook (2026-11-18)
 
 - Spec approved: `.cheese/specs/p2-new-chat-mute.md` (status `approved`). New Chat mockup v10 approved by Tony; copy in the vault at `01 - Projects/Rigel/Mockups/mockup-v10-new-chat.html`. Decisions logged in the vault's decision log under 00 - Raw.

@@ -5,6 +5,9 @@ import SettingsPanel from "./components/SettingsPanel.jsx";
 import BrainChip from "./components/BrainChip.jsx";
 import ViewArea from "./components/ViewArea.jsx";
 import RunningApps from "./components/RunningApps.jsx";
+import ConversationControls from "./components/ConversationControls.jsx";
+import HistoryPanel from "./components/HistoryPanel.jsx";
+import { setWakeWordMuted } from "./voice.js";
 import {
   getLogs,
   getOrbConfig,
@@ -14,6 +17,10 @@ import {
   getToolboxApprovals,
   getToolboxStatus,
   interpretToolboxApproval,
+  getMicWakeWord,
+  saveMicWakeWord,
+  listConversations,
+  startNewConversation,
 } from "./api.js";
 import {
   restoreRestingBounds,
@@ -87,6 +94,56 @@ export default function App() {
   const announcedApprovalsRef = useRef(new Set());
   const [approvalListening, setApprovalListening] = useState(false);
   const [toolboxStatus, setToolboxStatus] = useState(null);
+
+  // P2: mute (wake-word listening on/off), New Chat, and history.
+  const [micOn, setMicOn] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [conversations, setConversations] = useState([]);
+  const [activeConvId, setActiveConvId] = useState(null);
+
+  function refreshConversations() {
+    listConversations()
+      .then((data) => {
+        setConversations(data.conversations);
+        setActiveConvId(data.active_id);
+      })
+      .catch(() => {});
+  }
+
+  useEffect(() => {
+    getMicWakeWord()
+      .then((cfg) => {
+        setMicOn(cfg.enabled);
+        setWakeWordMuted(!cfg.enabled).catch(() => {});
+      })
+      .catch(() => {});
+    refreshConversations();
+  }, []);
+
+  function handleToggleMic() {
+    const next = !micOn;
+    setMicOn(next);
+    setWakeWordMuted(!next).catch(() => {});
+    saveMicWakeWord(next).catch(() => {
+      setMicOn(!next);
+      setWakeWordMuted(next).catch(() => {});
+    });
+  }
+
+  // New Chat clears only the transcript. Pending approvals stay in state (NFR-4).
+  function handleNewChat() {
+    startNewConversation()
+      .then(() => {
+        setTurns([]);
+        refreshConversations();
+      })
+      .catch(() => {});
+  }
+
+  function handleToggleHistory() {
+    if (!historyOpen) refreshConversations();
+    setHistoryOpen((open) => !open);
+  }
 
   // Rehydrate the transcript and orb config on launch.
   useEffect(() => {
@@ -424,6 +481,13 @@ export default function App() {
                 : "ToolBox offline"}
             </span>
           )}
+          <ConversationControls
+            micOn={micOn}
+            onToggleMic={handleToggleMic}
+            onNewChat={handleNewChat}
+            historyOpen={historyOpen}
+            onToggleHistory={handleToggleHistory}
+          />
           <button
             className="settings-btn"
             onClick={() => setSettingsOpen(true)}
@@ -449,6 +513,13 @@ export default function App() {
         />
         {activeView !== "chat" && <ViewArea view={activeView} />}
         {!minimized && <BrainChip />}
+        {!minimized && historyOpen && (
+          <HistoryPanel
+            conversations={conversations}
+            activeId={activeConvId}
+            onClose={() => setHistoryOpen(false)}
+          />
+        )}
       </main>
 
       {/* Kept mounted (just hidden) while minimized so an in-flight send isn't torn down mid-request. */}

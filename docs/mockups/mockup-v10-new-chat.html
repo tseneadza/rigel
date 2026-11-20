@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Mockup v10: New Chat (P2)</title>
+<style>
+:root{--ice:120,200,255;--bg:#070b14;--text:#dcebff;--dim:#7f93b3;--mono:ui-monospace,"SF Mono",Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:#03060c;font-family:-apple-system,system-ui,sans-serif;color:var(--text);padding:24px}
+h1{font:600 14px var(--mono);letter-spacing:.08em;color:rgb(var(--ice));margin:0 0 6px}
+.note{color:var(--dim);font-size:13px;margin:0 0 16px;max-width:860px}
+.tabs{display:flex;gap:8px;margin-bottom:14px}
+.tabs button{font:12px var(--mono);color:var(--dim);background:transparent;border:1px solid rgba(var(--ice),.25);border-radius:8px;padding:6px 10px;cursor:pointer}
+.tabs button[aria-selected=true]{color:var(--text);border-color:rgb(var(--ice))}
+.screen{display:none}.screen.on{display:block}
+.win{position:relative;width:1140px;height:560px;background:var(--bg);border:1px solid rgba(var(--ice),.2);border-radius:12px;overflow:hidden}
+.hdr{position:absolute;left:20px;right:20px;top:14px;height:52px;display:flex;align-items:center;gap:10px;border:1px solid rgba(var(--ice),.2);border-radius:14px;padding:0 14px;background:rgba(var(--ice),.03)}
+.brand{font:700 15px var(--mono);letter-spacing:.2em;color:rgb(var(--ice));margin-right:14px}
+.pill,.ic{font:12px var(--mono);color:var(--text);border:1px solid rgba(var(--ice),.25);border-radius:8px;padding:6px 10px;background:rgba(var(--ice),.06)}
+.ic{width:34px;text-align:center;padding:6px 0}
+.ic.new{border-color:rgb(var(--ice))}
+.spacer{flex:1}
+.chat{position:absolute;left:190px;right:260px;top:90px;bottom:150px;overflow:hidden;font-size:13px}
+.line{margin:0 0 12px}.who{font:11px var(--mono);color:rgb(var(--ice));letter-spacing:.08em;margin-bottom:3px}
+.txt{color:var(--text);line-height:1.5}
+.empty{position:absolute;left:190px;right:260px;top:200px;text-align:center;color:var(--dim);font:13px var(--mono)}
+.history{position:absolute;right:20px;top:90px;bottom:150px;width:220px;border:1px solid rgba(var(--ice),.2);border-radius:10px;padding:12px;font:12px var(--mono);color:var(--dim)}
+.history .h{color:rgb(var(--ice));letter-spacing:.08em;margin-bottom:8px}
+.history .row{padding:7px 8px;border-radius:6px;margin-bottom:4px}
+.history .row.sel{background:rgba(var(--ice),.1);color:var(--text)}
+.input{position:absolute;left:190px;right:260px;bottom:90px;height:44px;border:1px solid rgba(var(--ice),.25);border-radius:12px;padding:12px 14px;color:var(--dim);font-size:13px}
+.orb{position:absolute;right:18px;bottom:52px;width:86px;height:86px;border-radius:50%;background:radial-gradient(circle at 42% 38%,#fff,rgb(var(--ice)) 22%,rgba(var(--ice),.2) 55%,transparent 70%);box-shadow:0 0 34px rgba(var(--ice),.55)}
+.brainBR{position:absolute;right:18px;bottom:172px;font:11.5px var(--mono);color:var(--text);border:1px solid rgba(var(--ice),.3);border-radius:999px;padding:5px 10px;background:rgba(var(--ice),.06);opacity:0}
+.tag{position:absolute;left:20px;bottom:14px;font:11px var(--mono);color:var(--dim)}
+.cap{font:12px var(--mono);color:rgb(var(--ice));margin:0 0 8px}
+</style></head><body>
+<h1>MOCKUP v10 · NEW CHAT (P2)</h1>
+<p class="note">Sample data only. Left: the transcript before New Chat. Right: after New Chat. The transcript is empty, the old chat moves to History, and the LLM starts with no prior turns. The brain chip stays hidden until the orb is hovered (v9).</p>
+<div class="tabs">
+  <button role="tab" aria-selected="true" data-s="before">Before New Chat</button>
+  <button role="tab" aria-selected="false" data-s="after">After New Chat</button>
+</div>
+
+<section class="screen on" id="before">
+  <p class="cap">Agent Chat · one conversation in progress</p>
+  <div class="win">
+    <div class="hdr">
+      <div class="brand">RIGEL</div>
+      <div class="pill" style="min-width:150px">Agent Chat ▾</div>
+      <div class="spacer"></div>
+      <div class="pill">ToolBox · 10 servers ▾</div>
+      <div class="ic" title="Mute Rigel's ears">🎙</div>
+      <div class="ic new" title="New chat">＋</div>
+      <div class="ic" title="Full screen">⛶</div>
+      <div class="ic" title="Settings">⚙</div>
+    </div>
+    <div class="chat">
+      <div class="line"><div class="who">YOU</div><div class="txt">My sister is Priya. Remember that.</div></div>
+      <div class="line"><div class="who">RIGEL</div><div class="txt">Got it. Priya is your sister.</div></div>
+      <div class="line"><div class="who">YOU</div><div class="txt">What's the battery health on this Mac?</div></div>
+      <div class="line"><div class="who">RIGEL</div><div class="txt">85% health, 107 cycles.</div></div>
+    </div>
+    <div class="input">Message Rigel…</div>
+    <div class="brainBR">Ollama · dutchit/minimax-h3-prompt-enhancer:latest · Local</div>
+    <div class="orb"></div>
+    <div class="tag">mock · sample data</div>
+  </div>
+</section>
+
+<section class="screen" id="after">
+  <p class="cap">Agent Chat · after New Chat: empty transcript, old chat in History</p>
+  <div class="win">
+    <div class="hdr">
+      <div class="brand">RIGEL</div>
+      <div class="pill" style="min-width:150px">Agent Chat ▾</div>
+      <div class="spacer"></div>
+      <div class="pill">ToolBox · 10 servers ▾</div>
+      <div class="ic" title="Mute Rigel's ears">🎙</div>
+      <div class="ic new" title="New chat">＋</div>
+      <div class="ic" title="Full screen">⛶</div>
+      <div class="ic" title="Settings">⚙</div>
+    </div>
+    <div class="empty">New chat. Rigel has no earlier context.</div>
+    <div class="history">
+      <div class="h">HISTORY</div>
+      <div class="row sel">● New chat · now</div>
+      <div class="row">Battery check · 04:12</div>
+      <div class="row">Priya + sister · 03:40</div>
+      <div class="row" style="color:#7f93b3">Nothing is deleted.</div>
+    </div>
+    <div class="input">Message Rigel…</div>
+    <div class="brainBR" style="opacity:1">Ollama · dutchit/minimax-h3-prompt-enhancer:latest · Local</div>
+    <div class="orb"></div>
+    <div class="tag">mock · sample data</div>
+  </div>
+</section>
+
+<script>
+const tabs=[...document.querySelectorAll('[role=tab]')];
+tabs.forEach(t=>t.addEventListener('click',()=>{
+  tabs.forEach(x=>x.setAttribute('aria-selected',String(x===t)));
+  document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===t.dataset.s));
+}));
+</script>
+</body></html>

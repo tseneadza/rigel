@@ -150,7 +150,19 @@ def _parse_response_json(raw: str) -> tuple[str, list[dict]]:
 
 # ── Claude ───────────────────────────────────────────────────────────────
 
-def claude_respond(text: str, model: str, extra_system: str = "") -> tuple[str, list[dict]]:
+def with_history(history: list[dict] | None, text: str) -> list[dict]:
+    """Earlier turns plus the current user text. A trailing user turn is merged
+    with the current text so roles still alternate."""
+    msgs = [dict(m) for m in (history or [])]
+    if msgs and msgs[-1]["role"] == "user":
+        msgs[-1]["content"] += "\n" + text
+    else:
+        msgs.append({"role": "user", "content": text})
+    return msgs
+
+
+def claude_respond(text: str, model: str, extra_system: str = "",
+                   history: list[dict] | None = None) -> tuple[str, list[dict]]:
     if model not in CLAUDE_MODELS:
         raise LLMError(f"unknown Claude model: {model!r}")
 
@@ -160,7 +172,7 @@ def claude_respond(text: str, model: str, extra_system: str = "") -> tuple[str, 
             model=model,
             max_tokens=1024,
             system=SYSTEM_PROMPT + extra_system,
-            messages=[{"role": "user", "content": text}],
+            messages=with_history(history, text),
             output_config={"format": {"type": "json_schema", "schema": RESPONSE_SCHEMA}},
         )
     except anthropic.AuthenticationError as e:
@@ -257,7 +269,7 @@ def _ollama_request(host: str, path: str, body: dict | None, timeout: float) -> 
 
 
 def ollama_respond(text: str, model: str, host: str = DEFAULT_OLLAMA_HOST,
-                   extra_system: str = "") -> tuple[str, list[dict]]:
+                   extra_system: str = "", history: list[dict] | None = None) -> tuple[str, list[dict]]:
     schema_hint = (
         "Respond with ONLY a JSON object of the exact shape "
         '{"reply": "<string>", "commands": [{"action": '
@@ -271,7 +283,7 @@ def ollama_respond(text: str, model: str, host: str = DEFAULT_OLLAMA_HOST,
         "format": "json",
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT + extra_system + " " + schema_hint},
-            {"role": "user", "content": text},
+            *with_history(history, text),
         ],
     }
     keep_alive = os.getenv("OLLAMA_KEEP_ALIVE")

@@ -155,3 +155,9 @@ export async function listenOnce() {
   const { invoke } = await import("@tauri-apps/api/core");
   return invoke("voice_listen_once");
 }
+
+// P2 mute (FR-18): mutes only the wake word; approvals by voice still work.
+export async function setWakeWordMuted(muted) {
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke("voice_set_wake_word_muted", { muted });
+}

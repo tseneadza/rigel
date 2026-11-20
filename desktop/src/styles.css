@@ -1056,3 +1056,81 @@ body[data-minimized="true"] {
   right: 18px;
 }
 .stage:has(.rigel-orb[data-position="docked"]) .brain-chip { bottom: 190px; }
+
+/* ── P2: New Chat, history, mute (mockup v10) ───────────────────────────── */
+.icon-btn {
+  position: relative;
+  border: 1px solid rgba(var(--ice), 0.25);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  width: 30px;
+  height: 30px;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.icon-btn:hover,
+.icon-btn:focus-visible,
+.icon-btn.is-open {
+  border-color: rgb(var(--ice));
+  color: rgb(var(--ice));
+  outline: none;
+}
+.icon-btn--text {
+  width: auto;
+  padding: 0 10px;
+  font-size: 12px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+/* Muted: a diagonal slash over the ear icon. */
+.icon-btn--muted { color: #ff9a9a; border-color: rgba(255, 120, 120, 0.45); }
+.icon-btn--muted::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 50%;
+  height: 1.5px;
+  background: #ff7878;
+  transform: rotate(-35deg);
+}
+.history-panel {
+  position: absolute;
+  right: 20px;
+  top: 90px;
+  bottom: 150px;
+  width: 260px;
+  z-index: 3;
+  overflow-y: auto;
+  border: 1px solid rgba(var(--ice), 0.2);
+  border-radius: 10px;
+  padding: 12px;
+  background: rgba(7, 11, 20, 0.92);
+  font: 12px ui-monospace, "SF Mono", Menlo, monospace;
+  color: var(--text-dim);
+}
+.history-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.history-title { color: rgb(var(--ice)); letter-spacing: 0.08em; }
+.history-close { background: transparent; border: none; color: var(--text-dim); font-size: 16px; cursor: pointer; }
+.history-list { list-style: none; margin: 0; padding: 0; }
+.history-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 8px;
+  margin-bottom: 4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  cursor: pointer;
+}
+.history-row:hover, .history-row.is-open { background: rgba(var(--ice), 0.1); color: var(--text); }
+.history-turns { padding: 4px 8px 10px; font-family: inherit; }
+.history-turn { margin: 0 0 6px; line-height: 1.45; color: var(--text); }
+.history-empty, .history-error { margin: 0 0 6px; }
+.history-error { color: #ff9a9a; }
+.history-note { margin: 10px 0 0; font-size: 11px; color: var(--text-dim); }

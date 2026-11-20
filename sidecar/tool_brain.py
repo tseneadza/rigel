@@ -255,11 +255,12 @@ def _need_summary(text: str) -> str:
 
 # ── Claude ───────────────────────────────────────────────────────────────
 
-def _claude_loop(text: str, model: str, runner: _Runner, max_steps: int) -> tuple[str, list[dict]]:
+def _claude_loop(text: str, model: str, runner: _Runner, max_steps: int,
+                 history: list[dict] | None = None) -> tuple[str, list[dict]]:
     if model not in llm_providers.CLAUDE_MODELS:
         raise llm_providers.LLMError(f"unknown Claude model: {model!r}")
     client = llm_providers.anthropic_client()
-    messages: list[dict] = [{"role": "user", "content": text}]
+    messages: list[dict] = llm_providers.with_history(history, text)
     system = llm_providers.SYSTEM_PROMPT + TOOLBOX_SYSTEM
     used = 0
     for _ in range(max_steps + 2):
@@ -313,11 +314,13 @@ def ollama_supports_tools(model: str, host: str) -> bool:
     return "tools" in (info.get("capabilities") or [])
 
 
-def _ollama_loop(text: str, model: str, host: str, runner: _Runner, max_steps: int) -> tuple[str, list[dict]]:
+def _ollama_loop(text: str, model: str, host: str, runner: _Runner, max_steps: int,
+                 history: list[dict] | None = None) -> tuple[str, list[dict]]:
     system = llm_providers.SYSTEM_PROMPT + TOOLBOX_SYSTEM + (
         " To answer, call respond with reply and commands (args_json is a JSON-encoded string)."
     )
-    messages: list[dict] = [{"role": "system", "content": system}, {"role": "user", "content": text}]
+    messages: list[dict] = [{"role": "system", "content": system},
+                            *llm_providers.with_history(history, text)]
     used = 0
     for _ in range(max_steps + 2):
         tools = [NEED_TOOL, CALL_TOOL, RESPOND_TOOL] if used < max_steps else [RESPOND_TOOL]
@@ -365,7 +368,8 @@ def _ollama_loop(text: str, model: str, host: str, runner: _Runner, max_steps: i
 
 # ── entry point ──────────────────────────────────────────────────────────
 
-def respond(text: str, llm_config: dict, toolbox_config: dict) -> tuple[str, list[dict], list[ToolStep]]:
+def respond(text: str, llm_config: dict, toolbox_config: dict,
+            history: list[dict] | None = None) -> tuple[str, list[dict], list[ToolStep]]:
     """Raises ToolBoxUnavailable (→ caller falls back), LLMError (→ caller
     falls back to the stub), or returns (reply, commands, steps)."""
     base_url = toolbox_client.discover_base_url(toolbox_config.get("url"))
@@ -375,11 +379,12 @@ def respond(text: str, llm_config: dict, toolbox_config: dict) -> tuple[str, lis
     provider = llm_config.get("provider")
     try:
         if provider == "claude":
-            reply, commands = _claude_loop(text, llm_config["claude_model"], runner, max_steps)
+            reply, commands = _claude_loop(text, llm_config["claude_model"], runner, max_steps, history)
         elif provider == "ollama":
             reply, commands = _ollama_loop(
                 text, llm_config["ollama_model"],
                 llm_config.get("ollama_host", llm_providers.DEFAULT_OLLAMA_HOST), runner, max_steps,
+                history,
             )
         else:
             raise llm_providers.LLMError(f"provider {provider!r} has no tool use")

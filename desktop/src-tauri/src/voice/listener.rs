@@ -213,6 +213,7 @@ fn run(app: AppHandle, wakeword_path: PathBuf, stop_flag: Arc<AtomicBool>) -> Re
     let mut last_status = Instant::now();
     let mut noise_floor: f32 = 0.0;
     let mut gated_last_chunk = false;
+    let mut muted_last_chunk = false;
     loop {
         if stop_flag.load(Ordering::SeqCst) {
             break;
@@ -290,6 +291,24 @@ fn run(app: AppHandle, wakeword_path: PathBuf, stop_flag: Arc<AtomicBool>) -> Re
                         chunk_levels: Vec::with_capacity(512),
                         onset_grace: LISTEN_ONCE_ONSET_GRACE,
                     };
+                    continue;
+                }
+
+                // Muted (FR-18): the wake word is ignored. Listen-once above still
+                // works, so a pending approval can be answered by voice.
+                if super::wake_word_muted() {
+                    if !muted_last_chunk {
+                        log::info!("voice listener: wake word muted by user");
+                        muted_last_chunk = true;
+                    }
+                    frame_buffer.clear();
+                    continue;
+                }
+                if muted_last_chunk {
+                    muted_last_chunk = false;
+                    rustpotter.reset();
+                    frame_buffer.clear();
+                    log::info!("voice listener: wake word unmuted, detector reset");
                     continue;
                 }
 
