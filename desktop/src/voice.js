@@ -161,3 +161,14 @@ export async function setWakeWordMuted(muted) {
   const { invoke } = await import("@tauri-apps/api/core");
   return invoke("voice_set_wake_word_muted", { muted });
 }
+
+/**
+ * Cancel a pending or in-progress listen-once: the approval it was for was
+ * answered by click, or is no longer waiting. Without this the recording
+ * kept running and captured Rigel's own spoken reply (live bug, 2026-11-22).
+ */
+export async function cancelListenOnce() {
+  if (!isTauri()) return;
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke("voice_cancel_listen_once");
+}

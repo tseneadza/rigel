@@ -39,6 +39,7 @@ import {
   subscribeInEffect,
   looksLikeSpeech,
   listenOnce,
+  cancelListenOnce,
 } from "./voice.js";
 
 // How often to check for ToolBox approvals while a reply is in flight, and
@@ -183,7 +184,7 @@ export default function App() {
   // (unlike typed messages, where that's opt-in via Settings).
   useEffect(
     () =>
-      subscribeInEffect(onTranscript, async ({ text }) => {
+      subscribeInEffect(onTranscript, async ({ text, listen_once }) => {
         if (!looksLikeSpeech(text)) {
           console.warn("Dropped non-speech transcript:", text);
           setOrbState("idle");
@@ -193,6 +194,14 @@ export default function App() {
         // answer, not a new request (with or without the wake word).
         if (approvalsRef.current.length > 0) {
           await answerApprovalByVoice(approvalsRef.current[0], text);
+          return;
+        }
+        // A listen-once recording is only ever an answer to a card. With no
+        // card waiting it's stray audio (live bug, 2026-11-22: Rigel's own
+        // spoken reply came back in as a message), never a new request.
+        if (listen_once) {
+          console.info("Dropped listen-once transcript with no approval waiting:", text);
+          setOrbState("idle");
           return;
         }
         voiceBusyRef.current = true;
@@ -232,6 +241,7 @@ export default function App() {
   // can be waiting on an answer (the sidecar holds the /chat open).
   useEffect(() => {
     if (chatsInFlight <= 0) {
+      if (approvalsRef.current.length > 0) cancelListenOnce().catch(() => {});
       approvalsRef.current = [];
       setToolboxApprovals([]);
       setApprovalListening(false);
@@ -242,9 +252,15 @@ export default function App() {
       getToolboxApprovals()
         .then(({ approvals }) => {
           if (stopped) return;
+          const hadApprovals = approvalsRef.current.length > 0;
           approvalsRef.current = approvals;
           setToolboxApprovals(approvals);
-          if (approvals.length === 0) setApprovalListening(false);
+          if (approvals.length === 0) {
+            setApprovalListening(false);
+            // The card went away (answered elsewhere, or the server stopped
+            // waiting): stop listening for an answer to it.
+            if (hadApprovals) cancelListenOnce().catch(() => {});
+          }
           for (const a of approvals) {
             if (announcedApprovalsRef.current.has(a.id)) continue;
             announcedApprovalsRef.current.add(a.id);
@@ -301,6 +317,9 @@ export default function App() {
     approvalsRef.current = left;
     setToolboxApprovals(left);
     setApprovalListening(false);
+    // Answered by click: stop the spoken-answer recording, or it keeps
+    // running and picks up Rigel's own reply (live bug, 2026-11-22).
+    cancelListenOnce().catch(() => {});
   }
 
   // Header badge: is ToolBox reachable?
