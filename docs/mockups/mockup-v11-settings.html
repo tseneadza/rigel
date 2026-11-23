@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Rigel settings: mockup v11 (draft)</title>
+<style>
+  :root { --bg:#060b15; --panel:#0c1424; --line:#1b2a44; --text:#dbe7ff; --dim:#7f93b5; --blue:#8ec5ff; --amber:#f2c14e; --red:#ff7a7a; --ok:#7ee0a8; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 -apple-system,system-ui,sans-serif; }
+  .wrap { max-width: 760px; margin: 24px auto; padding: 0 20px; }
+  h1 { font-size: 18px; letter-spacing: .08em; margin: 0 0 4px; color: var(--blue); }
+  .sub { color: var(--dim); font-size: 12px; margin-bottom: 18px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 0 0 10px; }
+  .row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding: 9px 0; border-top: 1px solid var(--line); }
+  .row:first-of-type { border-top: 0; }
+  .label b { font-weight: 600; }
+  .label small { display:block; color: var(--dim); font-size: 12px; margin-top: 2px; }
+  .toggle { width: 38px; height: 22px; border-radius: 22px; background: #22345a; position: relative; flex: none; }
+  .toggle::after { content:""; position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:#8ea6cf; }
+  .toggle.on { background: #1f5d8f; }
+  .toggle.on::after { left: 19px; background: var(--blue); }
+  .pill { font-size: 11px; padding: 2px 8px; border-radius: 10px; border:1px solid; }
+  .pill.risk { color: var(--amber); border-color: #6b5520; background: #2a2210; }
+  .pill.safe { color: var(--ok); border-color: #2b5a44; background: #112a20; }
+  .warn { margin-top: 8px; padding: 9px 11px; border-radius: 8px; background:#2a2210; border:1px solid #6b5520; color: var(--amber); font-size: 12.5px; }
+  .btn { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 8px; border:1px solid var(--line); background:#132038; color: var(--text); }
+  .btn.danger { color: var(--red); border-color:#5a2a2a; background:#241416; }
+  .slider { width: 220px; accent-color: var(--blue); }
+  .meta { color: var(--dim); font-size: 12px; }
+  .note { color: var(--dim); font-size: 12px; margin-top: 12px; }
+</style></head>
+<body><div class="wrap">
+  <h1>SETTINGS</h1>
+  <div class="sub">Mockup v11 · draft for approval · every setting is yours to change. Risky ones show a warning.</div>
+
+  <div class="card">
+    <h2>Listening</h2>
+    <div class="row"><div class="label"><b>Wake word</b><small>Say "Rigel" to start a command</small></div><div class="toggle on"></div></div>
+    <div class="row"><div class="label"><b>Speaker check</b> <span class="pill safe">recommended</span><small>Only listen to my voice. TV and room sound are ignored.</small></div><div class="toggle on"></div></div>
+    <div class="row"><div class="label"><b>Speaker check strictness</b><small>Higher rejects more of other voices but may miss you when you're hoarse.</small></div><input class="slider" type="range" min="0" max="100" value="60"></div>
+    <div class="row"><div class="label"><b>Empty listens before "click to answer"</b><small>Approval card stops listening after this many silent tries.</small></div><div><b>3</b> <span class="meta">listens</span></div></div>
+    <div class="row"><div class="label"><b>Microphone</b><small>MacBook Air Microphone</small></div><button class="btn">Change…</button></div>
+  </div>
+
+  <div class="card">
+    <h2>My voice profile</h2>
+    <div class="row"><div class="label"><b>Enrolled</b><small>3 phrases · created 2026-11-23 · stored in Rigel's database</small></div><div style="display:flex;gap:8px"><button class="btn">Re-enroll</button><button class="btn danger">Delete profile</button></div></div>
+    <div class="warn">Deleting the profile turns the speaker check off until you enroll again.</div>
+  </div>
+
+  <div class="card">
+    <h2>Approvals</h2>
+    <div class="row"><div class="label"><b>Allow spoken yes for approvals</b> <span class="pill risk">risky</span><small>Lets "yes" approve actions. Deletes and moves always need a click, even when this is on.</small></div><div class="toggle"></div></div>
+    <div class="warn">A spoken yes can be misheard. Turn this on only when you're alone and the TV is off.</div>
+    <div class="row"><div class="label"><b>Approval audit log</b><small>~/Library/Logs/com.tonyseneadza.rigel/approvals.log</small></div><button class="btn">Open</button></div>
+  </div>
+
+  <div class="card">
+    <h2>Advanced</h2>
+    <div class="row"><div class="label"><b>Reset noise floor</b> <span class="pill risk">advanced</span><small>Clears the room-noise level the listener learned. Use it if Rigel stops hearing you.</small></div><button class="btn">Reset</button></div>
+    <div class="row"><div class="label"><b>Speech model</b><small>ggml-base.en · vocabulary hint on</small></div><button class="btn">Choose…</button></div>
+  </div>
+
+  <div class="note">Draft mockup. No code yet. Approve or ask for changes before implementation.</div>
+</div></body></html>

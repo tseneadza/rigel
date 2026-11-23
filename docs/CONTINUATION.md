@@ -4,6 +4,22 @@ Read this first at the start of every Rigel session. Newest entry on top.
 
 ---
 
+## Speaker verification: build started (2026-11-23 01:50, branch `feature/speaker-verification` off main)
+
+- Approved by Tony: mockups v11 (settings) and v12 (enrollment) in `docs/mockups/`, decisions in `docs/specs/speaker-verification-and-settings-DRAFT.md`. Model download OK (ECAPA-TDNN ONNX, about 83 MB, first run).
+- DONE (uncommitted): `sidecar/db.py` `voice_profiles` table (new table only, no backup needed) with `save_voice_profile`, `get_voice_profile`, `delete_voice_profile`. Tests `sidecar/tests/test_db_voice_profile.py`: 8 pass, plus the 6 conversation tests (14 total).
+- DONE (uncommitted): `desktop/src-tauri/src/voice/speaker.rs`: cosine, best score over enrolled vectors, `is_enrolled_voice` (fails closed with no profile). `DEFAULT_THRESHOLD = 0.5` is a PLACEHOLDER until tuned. Six unit tests. Registered in `voice/mod.rs`. NOT compiled here: run `cargo test` on the Mac.
+- Note: `stt.rs` on this branch was restored to `main` (the vocabulary change lives on `feature/stt-vocabulary`, commit 0ec87f9).
+- Chose to proceed with the plan as written (sidecar sends the profile to the listener). Not yet built.
+- NEXT (needs the Mac for Rust builds): (1) model loader in `desktop/src-tauri` via ONNX Runtime with checksum check; (2) embedding + match against the stored profile; (3) gate the listener and approvals on the match (drop non-matching transcripts before wake word or approval); (4) enrollment UI (v12) and settings UI (v11); (5) measure false accept/reject on Tony's recorded clips, including TV, then set the default threshold.
+- Open design question for step 1: the profile lives in the sidecar DB, but matching runs in the Rust listener. Plan: sidecar serves the profile to the listener at start-up and after enrollment. Confirm before building.
+
+## Speech-to-text: vocabulary hint + term fixes (2026-11-23, NOT committed, NOT on a branch yet)
+
+- `desktop/src-tauri/src/voice/stt.rs`: Whisper initial prompt (`VOCAB_PROMPT`: Rigel, ToolBox, Codehome, Obsidian, scratch.txt, Tony Seneadza) and `fix_terms()`: exact whole-word fixes for observed mishearings ("Rigio", "Rigero", "rogeridol", "scratch.tit"). Unit tests added to the existing `tests` module.
+- Not compiled or run. Run `cargo test` in `desktop/src-tauri` on the Mac, then test with the live mic.
+- Git on this machine is blocked by stale lock files (`.git/index.lock`, `.git/HEAD.lock`). A leftover `.git/stale-index-lock-0600` was moved aside by hand. On the Mac, with no git running, delete the lock files, then create `feature/stt-vocabulary` from `origin/main` and commit this change.
+
 ## Voice approval fix: grunts must never approve (2026-11-23, branch `fix/voice-approval-noise`)
 
 **Branch:** `fix/voice-approval-noise` (from `ec50782`) · **Not committed yet**. Commit when Tony asks.
