@@ -129,9 +129,14 @@ Approval: server elicitation ─▶ ToolBox ─▶ toolbox_client._on_elicit
   reply was not picked up by the mic. Click approvals made while Rigel was
   still asking cancel the listen before it starts.
 
-**Not yet exercised live:** a click made after Rigel finished asking, while
-the listen-once recording is running. Commit `f3ba2fb` drops that
-recording when Rigel starts speaking its reply. Small Ollama models are unreliable at calls that need
+- Native app, 2026-11-22: a click while the listen-once recording was running
+  (04:55:36 to 04:55:38) logged `recording dropped (listen-once cancelled),
+  2.52s discarded`, and Rigel's reply was not transcribed (`f3ba2fb`).
+
+**Known gaps (desktop):** the "listening for your answer" bars appear when
+listening is requested, while Rigel is still speaking, before recording
+starts. A stray sound can also end the single listen-once early, after which
+nothing listens again although the card still says it is listening. Small Ollama models are unreliable at calls that need
 arguments; Claude is the recommended brain for ToolBox.
 
 ## API key (Claude)
