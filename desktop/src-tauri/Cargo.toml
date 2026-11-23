@@ -37,3 +37,6 @@ rustpotter = "3.0.2"
 # 0.8 lineage and satisfies candle-core's own ">=2.3.1" requirement.
 half = "=2.4.1"
 whisper-rs = "0.16.0"
+# ONNX Runtime for the speaker-embedding model (speaker.rs). Pinned to the
+# newest published line; 2.0 is still a release candidate, so keep the exact pin.
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "download-binaries", "copy-dylibs", "tls-native"] }

@@ -4,6 +4,17 @@ Read this first at the start of every Rigel session. Newest entry on top.
 
 ---
 
+## Speaker verification: groundwork committed, ort added (2026-11-23 02:00)
+
+- COMMITTED `a832e9b` on `feature/speaker-verification`: voice_profiles table + helpers + tests, `speaker.rs` + six tests, mockups v11/v12, spec draft, this doc. Not pushed by the sandbox: run `git push -u origin feature/speaker-verification` on the Mac after clearing `.git/HEAD.lock` (left by an interrupted commit).
+- Tony's `cargo test` (Mac): 19 passed, 0 failed, 4 ignored (live audio/TTS). The 4 dead-code warnings on `speaker.rs` are expected until the listener calls it.
+- ADDED, UNCOMMITTED: `ort = "=2.0.0-rc.13"` in `desktop/src-tauri/Cargo.toml` (newest published line; 2.0 is still a release candidate, so the exact pin is intentional). Tony ran `cargo build` and `cargo test` on the Mac: all passed (2026-11-23 02:04).
+- NOT DONE, blocked: model loader. Needs the ECAPA-TDNN ONNX file and its SHA-256, which the sandbox cannot download or verify. Do not write a checksum from memory.
+- OPEN: sidecar-to-listener profile transport design (confirm before wiring).
+- Next steps: (1) Tony supplies or approves the model source and checksum; (2) Tony builds on Mac and reports; (3) write loader + tests; (4) wire `is_enrolled_voice` into the listener only after threshold tuning plan is agreed.
+
+---
+
 ## Speaker verification: build started (2026-11-23 01:50, branch `feature/speaker-verification` off main)
 
 - Approved by Tony: mockups v11 (settings) and v12 (enrollment) in `docs/mockups/`, decisions in `docs/specs/speaker-verification-and-settings-DRAFT.md`. Model download OK (ECAPA-TDNN ONNX, about 83 MB, first run).
