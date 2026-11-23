@@ -3,8 +3,8 @@
 //! Settings from the model's config.yaml: 80 mel bins, 25 ms frames, 10 ms shift.
 //! Assumed, not yet checked against the reference implementation (the Mac
 //! reference check does that): pre-emphasis 0.97, Povey window, no dither at
-//! inference, and per-bin mean subtraction over time. The log floor and the
-//! input scale do not change the result after mean subtraction.
+//! inference, and per-bin mean subtraction over time. Input is scaled to int16
+//! units first, as the reference does, so the log floor falls in the same place.
 
 use std::f32::consts::PI;
 
@@ -97,7 +97,9 @@ fn power_spectrum(x: &[f32]) -> Vec<f32> {
 
 /// Log mel filter-bank features, flattened as [frames * NUM_MEL_BINS] (row-major
 /// by frame), with per-bin mean subtraction over time. Empty if too short.
-pub fn fbank(samples: &[f32]) -> Vec<f32> {
+pub fn fbank(input: &[f32]) -> Vec<f32> {
+    // Kaldi works in int16 units; matching that keeps the log floor in the same place.
+    let samples: Vec<f32> = input.iter().map(|s| s * 32768.0).collect();
     let frames = frame_count(samples.len());
     if frames == 0 {
         return Vec::new();
@@ -198,5 +200,45 @@ mod tests {
         assert!(fbank(&[0.0; 100]).is_empty());
         let feats = fbank(&vec![0.0_f32; 1600]);
         assert!(feats.iter().all(|v| v.abs() < 1e-6));
+    }
+}
+
+#[cfg(test)]
+mod reference {
+    //! Compares this frontend with the official Kaldi fbank.
+    //! Run after tools/speaker_ref_check.py:
+    //!   RIGEL_REF_WAV=<sample.wav> RIGEL_REF_FBANK=<out_dir>/ref_fbank.txt \
+    //!     cargo test voice::fbank::reference -- --ignored --nocapture
+    use super::*;
+
+    #[test]
+    #[ignore = "needs RIGEL_REF_WAV and RIGEL_REF_FBANK; see tools/speaker_ref_check.py"]
+    fn matches_reference_frontend() {
+        let wav = std::env::var("RIGEL_REF_WAV").expect("set RIGEL_REF_WAV");
+        let ref_path = std::env::var("RIGEL_REF_FBANK").expect("set RIGEL_REF_FBANK");
+
+        let mut reader = hound::WavReader::open(&wav).expect("open wav");
+        assert_eq!(reader.spec().sample_rate, 16_000, "sample must be 16 kHz");
+        assert_eq!(reader.spec().channels, 1, "sample must be mono");
+        let samples: Vec<f32> = reader
+            .samples::<i16>()
+            .map(|s| s.expect("read sample") as f32 / 32768.0)
+            .collect();
+
+        let ours = fbank(&samples);
+        let text = std::fs::read_to_string(&ref_path).expect("read reference");
+        let theirs: Vec<f32> = text
+            .split_ascii_whitespace()
+            .map(|t| t.parse().expect("parse reference value"))
+            .collect();
+
+        assert_eq!(ours.len(), theirs.len(), "frames * bins differ");
+        let max_diff = ours
+            .iter()
+            .zip(&theirs)
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0_f32, f32::max);
+        eprintln!("frames*bins={} max abs diff={max_diff}", ours.len());
+        assert!(max_diff < 0.05, "max abs diff {max_diff} is too large");
     }
 }
