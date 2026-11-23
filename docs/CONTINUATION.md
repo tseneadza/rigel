@@ -4,6 +4,28 @@ Read this first at the start of every Rigel session. Newest entry on top.
 
 ---
 
+## ToolBox follow-up fixes + PR (2026-11-22)
+
+**Branch:** `feature/rigel-view-screens-p2` (pushed) · **Draft PR:** https://github.com/tseneadza/rigel/pull/2 (persona + View Screens P1/P2 + these fixes; review before merging)
+
+Found by testing "use ToolBox to delete scratch.txt in my rigel folder" in the native app:
+- `a217a87` Guessed paths: every brain (including Claude Sonnet 5) targeted `~/rigel-files/` (Rigel's sandbox, seen in chat history). Fixed: `places_note()` in `tool_brain.py` (home, `~/Codehome/rigel`, sandbox), find-before-acting rule, `_missing_target` guard (no delete/move/rename for a path that doesn't exist), reply guard against "widen the allowed roots", honest reply when an outcome is repeated from history without a tool call. Tests: `sidecar/tests/test_paths.py`.
+- `f3ba2fb` Rigel heard itself: a click-approved card left listen-once recording; it captured Rigel's reply. Fixed: `voice_cancel_listen_once`, drop a recording when TTS starts, transcripts carry `listen_once`, stray ones dropped.
+- `dc666ae` Listening indicator: the card's bars follow the real `recording` state; after a stray sound it listens again up to 3 times, then shows "click to answer". **Not yet verified live.**
+
+Verified live (Rigel.log): click approve and decline, spoken "Yes, approved.", click during the question (listen cancelled before it starts), click while recording (`recording dropped (listen-once cancelled)`), right file found and deleted.
+
+Gates: 81 pytest tests, 9 Vitest tests, Vite build, and `cargo check` all clean.
+
+Next session, start here:
+1. Verify `dc666ae` with the mic. When a card appears, the bars should show only after Rigel stops speaking. Make a small sound and stay quiet: it should listen again, and after 3 empty tries show "click to answer".
+2. Brain setting: Tony's saved brain is Ollama `dutchit/minimax-h3-prompt-enhancer` (a prompt rewriter, not a tool-use model; it runs no tools). Recommend Claude (key in the Keychain as `rigel-anthropic-key`).
+3. Rigel's Claude model list is outdated (`claude-opus-5`, `claude-sonnet-5`, `claude-haiku-4-5`); the key can reach Opus 5.5, Sonnet 5.5, Haiku 5.5 and Fable 5.2.
+4. Review and merge PR #2; then continue View Screens (open P2 items below).
+5. Noise floor: the voice log often shows `noise_floor=0.00000` (seen 2026-11-22 before the restart), so the speech threshold sits at its 0.003 floor and room noise ends a listen early. Worth a look with voice-pipeline-integrity.
+
+---
+
 ## P2 checkpoint: sidecar + history (2026-11-20)
 
 Done (not committed yet; branch `feature/rigel-view-screens-p2`):
