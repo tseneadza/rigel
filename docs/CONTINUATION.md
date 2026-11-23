@@ -4,6 +4,17 @@ Read this first at the start of every Rigel session. Newest entry on top.
 
 ---
 
+## Speaker verification: embedding pipeline verified (2026-11-23 03:00)
+
+- VERIFIED ON MAC: `voice/fbank.rs` matches the Wespeaker reference frontend (max abs diff 0.00013 on Tony's 4.5 s sample). Test: `cargo test voice::fbank::reference -- --ignored`.
+- VERIFIED ON MAC: `voice/embedding.rs` (`SpeakerEncoder`) loads the pinned model (checksum checked first) and returns 192 numbers matching `tools/speaker_ref_check.py` (max abs diff 0.000007). Test: `cargo test voice::embedding -- --ignored`.
+- Model: Wespeaker `voxceleb_ECAPA512_LM.onnx`, licence CC-BY-4.0. Attribution kept in `voice/model.rs`. Downloaded to `~/Library/Application Support/com.tonyseneadza.rigel/models/`.
+- Not done: no matching logic yet wired to the listener; no enrollment flow; no threshold tuning (`DEFAULT_THRESHOLD = 0.5` still placeholder).
+- Open: sidecar-to-listener profile transport. Threshold tuning needs enrolled clips plus TV-audio clips.
+- Next steps: (1) decide profile transport; (2) enrollment: record 3 clips with the v12 flow, compute embeddings, store in `voice_profiles`; (3) tune threshold on your own clips and TV clips; (4) gate the listener.
+
+---
+
 ## Speaker verification: groundwork committed, ort added (2026-11-23 02:00)
 
 - COMMITTED `a832e9b` on `feature/speaker-verification`: voice_profiles table + helpers + tests, `speaker.rs` + six tests, mockups v11/v12, spec draft, this doc. Not pushed by the sandbox: run `git push -u origin feature/speaker-verification` on the Mac after clearing `.git/HEAD.lock` (left by an interrupted commit).
