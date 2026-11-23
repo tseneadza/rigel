@@ -4,6 +4,12 @@ Read this first at the start of every Rigel session. Newest entry on top.
 
 ---
 
+## Speech-to-text: vocabulary hint + term fixes (2026-11-23, NOT committed, NOT on a branch yet)
+
+- `desktop/src-tauri/src/voice/stt.rs`: Whisper initial prompt (`VOCAB_PROMPT`: Rigel, ToolBox, Codehome, Obsidian, scratch.txt, Tony Seneadza) and `fix_terms()`: exact whole-word fixes for observed mishearings ("Rigio", "Rigero", "rogeridol", "scratch.tit"). Unit tests added to the existing `tests` module.
+- Not compiled or run. Run `cargo test` in `desktop/src-tauri` on the Mac, then test with the live mic.
+- Git on this machine is blocked by stale lock files (`.git/index.lock`, `.git/HEAD.lock`). A leftover `.git/stale-index-lock-0600` was moved aside by hand. On the Mac, with no git running, delete the lock files, then create `feature/stt-vocabulary` from `origin/main` and commit this change.
+
 ## Voice approval fix: grunts must never approve (2026-11-23, branch `fix/voice-approval-noise`)
 
 **Branch:** `fix/voice-approval-noise` (from `ec50782`) · **Not committed yet**. Commit when Tony asks.
