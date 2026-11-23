@@ -18,8 +18,8 @@ Mockup: [`docs/mockups/toolbox-connect-v1.html`](../mockups/toolbox-connect-v1.h
 ## Status
 - [ ] Planned
 - [ ] In Development
-- [x] Alpha/Beta: built and verified on the real path (Claude and Ollama);
-      spoken approvals in the native app not yet verified live (see "Verified")
+- [x] Alpha/Beta: built and verified on the real path (Claude and Ollama),
+      including spoken approvals in the native app (see "Verified")
 - [ ] Production
 
 ## Decisions (Tony, 2026-11-15)
@@ -123,8 +123,15 @@ Approval: server elicitation ─▶ ToolBox ─▶ toolbox_client._on_elicit
   → follow-up → "yeah go ahead" approved by voice (file deleted); "no, leave
   it" / "nope" declined by voice (file kept, honest reply).
 
-**Not yet verified live:** the spoken yes/no in the native app (needs a
-person at the mic). Small Ollama models are unreliable at calls that need
+- Native app, 2026-11-22 (Rigel.log): spoken approval end to end. The
+  question was spoken, listen-once started without the wake word, Tony
+  said "Yes, approved.", the delete was approved by voice, and Rigel's
+  reply was not picked up by the mic. Click approvals made while Rigel was
+  still asking cancel the listen before it starts.
+
+**Not yet exercised live:** a click made after Rigel finished asking, while
+the listen-once recording is running. Commit `f3ba2fb` drops that
+recording when Rigel starts speaking its reply. Small Ollama models are unreliable at calls that need
 arguments; Claude is the recommended brain for ToolBox.
 
 ## API key (Claude)
