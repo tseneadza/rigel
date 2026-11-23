@@ -5,6 +5,7 @@ pub mod capture;
 pub mod enroll;
 pub mod listener;
 pub mod speaker;
+pub mod model;
 pub mod stt;
 pub mod tts;
 

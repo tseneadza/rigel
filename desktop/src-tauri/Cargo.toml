@@ -40,3 +40,4 @@ whisper-rs = "0.16.0"
 # ONNX Runtime for the speaker-embedding model (speaker.rs). Pinned to the
 # newest published line; 2.0 is still a release candidate, so keep the exact pin.
 ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "download-binaries", "copy-dylibs", "tls-native"] }
+sha2 = "0.10"
