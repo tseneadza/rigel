@@ -230,10 +230,14 @@ actually populates the registry at process start.
         `minimize` each actually work against a real, running VS Code, and
         a missing `code` CLI is handled with the clear error message
         rather than a traceback. **Not yet run**, same reason.
-  - [ ] A handler's scoped Claude call, against the real Anthropic API (not
+  - [x] A handler's scoped Claude call, against the real Anthropic API (not
         mocked), correctly returns zero commands for text that isn't
-        actually an in-app action (e.g. "open Chrome" alone should stay
-        the generic `open_app`, never an `app_action`). **Not yet run.**
+        actually an in-app action: "open Chrome" alone stays the generic
+        `open_app` (verified 2026-11-16 with claude-haiku-4-5).
+  - [x] An in-app request asks for one approval, not two: "open a new
+        Chrome tab to github.com" → only `chrome.new_tab`; "bring VS Code to
+        the front" → only `vscode.focus` (the duplicate `open_app` is
+        dropped; verified 2026-11-16).
 
 The framework's mechanics (registry matching, `preview`/`is_whitelisted`
 validation, the whitelist config shape, the `/handlers` endpoint, and the

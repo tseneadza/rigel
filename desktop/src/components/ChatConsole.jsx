@@ -18,7 +18,7 @@ export default function ChatConsole({
   pendingCommands = [],
   onCommandResolved,
   toolboxApprovals = [],
-  approvalListening = false,
+  approvalVoice = null,
   onApprovalAnswered,
 }) {
   const [text, setText] = useState("");
@@ -84,7 +84,7 @@ export default function ChatConsole({
       </div>
       <ToolBoxApproval
         approvals={toolboxApprovals}
-        listening={approvalListening}
+        voiceStatus={approvalVoice}
         onAnswered={onApprovalAnswered}
       />
       <CommandApproval commands={pendingCommands} onResolved={onCommandResolved} />

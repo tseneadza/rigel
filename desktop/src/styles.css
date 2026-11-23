@@ -986,3 +986,151 @@ body[data-minimized="true"] {
 .settings-row.vp-row > label { padding-top: 8px; }
 .settings-row.vp-row > .reset-btn { margin-top: 4px; }
 .vp-filters .vp-search { flex-basis: 120px; }
+
+/* ── P1: view switcher, docked orb, brain chip (PRD v6) ───────────────── */
+.stage { position: relative; }
+.view-select {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  color: #dcebff;
+  background: rgba(120, 200, 255, 0.06);
+  border: 1px solid rgba(120, 200, 255, 0.25);
+  border-radius: 8px;
+  padding: 5px 8px;
+}
+.view-select:focus-visible { outline: 1px solid rgba(120, 200, 255, 0.8); }
+.view-area {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 24px 32px 120px;
+  overflow: auto;
+  pointer-events: none;
+  color: #dcebff;
+}
+.view-area > * { pointer-events: auto; }
+.view-area h2 {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgb(120, 200, 255);
+  margin: 0 0 8px;
+}
+.view-area p { color: #7f93b3; font-size: 13px; }
+.brain-chip {
+  position: absolute;
+  right: 18px;
+  bottom: 14px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11.5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(120, 200, 255, 0.3);
+  background: rgba(120, 200, 255, 0.06);
+  color: #dcebff;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.brain-chip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgb(120, 230, 170);
+  box-shadow: 0 0 6px rgb(120, 230, 170);
+}
+.brain-chip-dot[data-unavailable] { background: rgb(255, 120, 120); box-shadow: 0 0 6px rgb(255, 120, 120); }
+
+/* Brain chip shows only while the orb is hovered (mockup v9). */
+.brain-chip { transition: opacity 0.2s ease; }
+.stage:not(:has(.rigel-orb:hover)) .brain-chip { opacity: 0; }
+
+/* Docked orb (non-chat views): bottom-right of the stage, brain chip stacked above it (mockup M1). */
+.rigel-orb[data-position="docked"] {
+  position: absolute;
+  bottom: 14px;
+  right: 18px;
+}
+.stage:has(.rigel-orb[data-position="docked"]) .brain-chip { bottom: 190px; }
+
+/* ── P2: New Chat, history, mute (mockup v10) ───────────────────────────── */
+.icon-btn {
+  position: relative;
+  border: 1px solid rgba(var(--ice), 0.25);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  width: 30px;
+  height: 30px;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.icon-btn:hover,
+.icon-btn:focus-visible,
+.icon-btn.is-open {
+  border-color: rgb(var(--ice));
+  color: rgb(var(--ice));
+  outline: none;
+}
+.icon-btn--text {
+  width: auto;
+  padding: 0 10px;
+  font-size: 12px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+/* Muted: a diagonal slash over the ear icon. */
+.icon-btn--muted { color: #ff9a9a; border-color: rgba(255, 120, 120, 0.45); }
+.icon-btn--muted::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 50%;
+  height: 1.5px;
+  background: #ff7878;
+  transform: rotate(-35deg);
+}
+.history-panel {
+  position: absolute;
+  right: 20px;
+  top: 90px;
+  bottom: 150px;
+  width: 260px;
+  z-index: 3;
+  overflow-y: auto;
+  border: 1px solid rgba(var(--ice), 0.2);
+  border-radius: 10px;
+  padding: 12px;
+  background: rgba(7, 11, 20, 0.92);
+  font: 12px ui-monospace, "SF Mono", Menlo, monospace;
+  color: var(--text-dim);
+}
+.history-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.history-title { color: rgb(var(--ice)); letter-spacing: 0.08em; }
+.history-close { background: transparent; border: none; color: var(--text-dim); font-size: 16px; cursor: pointer; }
+.history-list { list-style: none; margin: 0; padding: 0; }
+.history-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 8px;
+  margin-bottom: 4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  cursor: pointer;
+}
+.history-row:hover, .history-row.is-open { background: rgba(var(--ice), 0.1); color: var(--text); }
+.history-turns { padding: 4px 8px 10px; font-family: inherit; }
+.history-turn { margin: 0 0 6px; line-height: 1.45; color: var(--text); }
+.history-empty, .history-error { margin: 0 0 6px; }
+.history-error { color: #ff9a9a; }
+.history-note { margin: 10px 0 0; font-size: 11px; color: var(--text-dim); }

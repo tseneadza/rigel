@@ -18,8 +18,8 @@ Mockup: [`docs/mockups/toolbox-connect-v1.html`](../mockups/toolbox-connect-v1.h
 ## Status
 - [ ] Planned
 - [ ] In Development
-- [x] Alpha/Beta: built and verified on the real path (Claude and Ollama);
-      spoken approvals in the native app not yet verified live (see "Verified")
+- [x] Alpha/Beta: built and verified on the real path (Claude and Ollama),
+      including spoken approvals in the native app (see "Verified")
 - [ ] Production
 
 ## Decisions (Tony, 2026-11-15)
@@ -123,8 +123,20 @@ Approval: server elicitation ─▶ ToolBox ─▶ toolbox_client._on_elicit
   → follow-up → "yeah go ahead" approved by voice (file deleted); "no, leave
   it" / "nope" declined by voice (file kept, honest reply).
 
-**Not yet verified live:** the spoken yes/no in the native app (needs a
-person at the mic). Small Ollama models are unreliable at calls that need
+- Native app, 2026-11-22 (Rigel.log): spoken approval end to end. The
+  question was spoken, listen-once started without the wake word, Tony
+  said "Yes, approved.", the delete was approved by voice, and Rigel's
+  reply was not picked up by the mic. Click approvals made while Rigel was
+  still asking cancel the listen before it starts.
+
+- Native app, 2026-11-22: a click while the listen-once recording was running
+  (04:55:36 to 04:55:38) logged `recording dropped (listen-once cancelled),
+  2.52s discarded`, and Rigel's reply was not transcribed (`f3ba2fb`).
+
+**Known gaps (desktop):** the "listening for your answer" bars appear when
+listening is requested, while Rigel is still speaking, before recording
+starts. A stray sound can also end the single listen-once early, after which
+nothing listens again although the card still says it is listening. Small Ollama models are unreliable at calls that need
 arguments; Claude is the recommended brain for ToolBox.
 
 ## API key (Claude)

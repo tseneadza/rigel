@@ -65,7 +65,37 @@ pub fn tts_blocks_listening() -> bool {
 static LISTEN_ONCE: AtomicBool = AtomicBool::new(false);
 
 pub fn take_listen_once() -> bool {
-    LISTEN_ONCE.swap(false, Ordering::SeqCst)
+    let take = LISTEN_ONCE.swap(false, Ordering::SeqCst);
+    if take {
+        // A fresh listen-once starts clean: no stale cancel from an earlier one.
+        CANCEL_LISTEN_ONCE.store(false, Ordering::SeqCst);
+    }
+    take
+}
+
+/// Set when the approval a listen-once was for has been answered another
+/// way (a click) or has gone away. Consumed by a listen-once recording in
+/// progress, which is then dropped instead of being transcribed. Live bug
+/// (2026-11-22): Tony clicked Approve, the recording kept running, captured
+/// Rigel's own spoken reply, and fed it back in as if Tony had said it.
+static CANCEL_LISTEN_ONCE: AtomicBool = AtomicBool::new(false);
+
+pub fn take_cancel_listen_once() -> bool {
+    CANCEL_LISTEN_ONCE.swap(false, Ordering::SeqCst)
+}
+
+/// "Rigel's ears" muted (P2, FR-18). Silences only the wake word: a ToolBox
+/// approval can still be answered by voice (listen-once above). The desktop
+/// UI sets it, and syncs it from the sidecar setting on launch.
+static WAKE_WORD_MUTED: AtomicBool = AtomicBool::new(false);
+
+pub fn wake_word_muted() -> bool {
+    WAKE_WORD_MUTED.load(Ordering::SeqCst)
+}
+
+#[tauri::command]
+pub fn voice_set_wake_word_muted(muted: bool) {
+    WAKE_WORD_MUTED.store(muted, Ordering::SeqCst);
 }
 
 /// Holds the running listener thread's stop handle, if voice is enabled.
@@ -98,5 +128,27 @@ pub fn voice_listen_once(state: State<ListenerState>) -> Result<(), String> {
         return Err("Voice listening is off. Turn it on in Settings → Voice.".to_string());
     }
     LISTEN_ONCE.store(true, Ordering::SeqCst);
+    Ok(())
+}
+
+#[cfg(test)]
+mod wake_mute_tests {
+    use super::*;
+
+    #[test]
+    fn wake_word_mute_flag_round_trips() {
+        voice_set_wake_word_muted(true);
+        assert!(wake_word_muted());
+        voice_set_wake_word_muted(false);
+        assert!(!wake_word_muted());
+    }
+}
+
+/// Cancel a pending or in-progress listen-once (the approval was answered by
+/// click, or is no longer waiting). Harmless when nothing is pending.
+#[tauri::command]
+pub fn voice_cancel_listen_once() -> Result<(), String> {
+    LISTEN_ONCE.store(false, Ordering::SeqCst);
+    CANCEL_LISTEN_ONCE.store(true, Ordering::SeqCst);
     Ok(())
 }

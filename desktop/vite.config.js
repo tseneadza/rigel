@@ -15,4 +15,10 @@ export default defineConfig(async () => ({
     hmr: host ? { protocol: "ws", host, port: 1426 } : undefined,
     watch: { ignored: ["**/src-tauri/**"] },
   },
+  test: {
+    environment: "jsdom",
+    globals: true,
+    setupFiles: ["./vitest.setup.js"],
+    include: ["src/**/*.test.{js,jsx}"],
+  },
 }));

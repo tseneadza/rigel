@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import RigelOrb from "./components/RigelOrb.jsx";
 import ChatConsole from "./components/ChatConsole.jsx";
 import SettingsPanel from "./components/SettingsPanel.jsx";
+import BrainChip from "./components/BrainChip.jsx";
+import ViewArea from "./components/ViewArea.jsx";
 import RunningApps from "./components/RunningApps.jsx";
+import ConversationControls from "./components/ConversationControls.jsx";
+import HistoryPanel from "./components/HistoryPanel.jsx";
+import { setWakeWordMuted } from "./voice.js";
 import {
   getLogs,
   getOrbConfig,
@@ -12,6 +17,10 @@ import {
   getToolboxApprovals,
   getToolboxStatus,
   interpretToolboxApproval,
+  getMicWakeWord,
+  saveMicWakeWord,
+  listConversations,
+  startNewConversation,
 } from "./api.js";
 import {
   restoreRestingBounds,
@@ -30,12 +39,16 @@ import {
   subscribeInEffect,
   looksLikeSpeech,
   listenOnce,
+  cancelListenOnce,
 } from "./voice.js";
 
 // How often to check for ToolBox approvals while a reply is in flight, and
 // how often to refresh the ToolBox badge otherwise.
 const APPROVAL_POLL_MS = 600;
 const TOOLBOX_STATUS_POLL_MS = 20000;
+// How many times to listen again for a spoken answer after a listen ends
+// with nothing usable (a cough, a click, silence), before "click to answer".
+const MAX_RELISTENS = 2; // re-listens after the first listen: 3 empty listens in total
 
 // Fallback only — used before orbConfig has loaded from the sidecar; the
 // real minimized size comes from orbConfig.min_diameter_px (Settings → Orb).
@@ -46,6 +59,13 @@ const MINIMIZED_WINDOW_MARGIN_PX = 40;
 // a second, and shrinking/restoring the OS window for that reads as the
 // window vanishing and popping back. The shrink is for genuinely long work.
 const WORKING_MINIMIZE_DELAY_MS = 2500;
+// Main-view choices (PRD v6 FR-1). Non-chat views dock the orb at this size.
+const VIEWS = [
+  { id: "chat", label: "Agent Chat" },
+  { id: "toolbox", label: "Toolbox" },
+  { id: "presentation", label: "Presentation" },
+];
+const DOCKED_DIAMETER_PX = 120;
 
 export default function App() {
   const [turns, setTurns] = useState([]);
@@ -54,6 +74,7 @@ export default function App() {
   const [online, setOnline] = useState(null); // null = unknown, true/false once probed
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [manualMinimize, setManualMinimize] = useState(false);
+  const [activeView, setActiveView] = useState("chat");
   const [orbConfig, setOrbConfig] = useState({
     diameter_px: 620,
     min_diameter_px: DEFAULT_MIN_DIAMETER_PX,
@@ -75,8 +96,69 @@ export default function App() {
   const [toolboxApprovals, setToolboxApprovals] = useState([]);
   const approvalsRef = useRef([]);
   const announcedApprovalsRef = useRef(new Set());
-  const [approvalListening, setApprovalListening] = useState(false);
+  // Spoken-answer status shown on the approval card:
+  //   null        not listening (voice off, or answered)
+  //   "waiting"   listening requested; Rigel is still speaking the question
+  //   "listening" the mic is actually recording an answer
+  //   "click"     gave up listening after a few empty tries; click to answer
+  // Live bugs (2026-11-22): the bars showed while Rigel was still talking,
+  // and a stray sound used up the single listen while the card still said
+  // "listening for your answer".
+  const [approvalVoice, setApprovalVoice] = useState(null);
+  const listenArmedRef = useRef(false);   // a listen-once is pending or recording for the current card
+  const sawRecordingRef = useRef(false);  // that listen actually started recording
+  const relistensRef = useRef(0);         // re-listens used for the current card
   const [toolboxStatus, setToolboxStatus] = useState(null);
+
+  // P2: mute (wake-word listening on/off), New Chat, and history.
+  const [micOn, setMicOn] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [conversations, setConversations] = useState([]);
+  const [activeConvId, setActiveConvId] = useState(null);
+
+  function refreshConversations() {
+    listConversations()
+      .then((data) => {
+        setConversations(data.conversations);
+        setActiveConvId(data.active_id);
+      })
+      .catch(() => {});
+  }
+
+  useEffect(() => {
+    getMicWakeWord()
+      .then((cfg) => {
+        setMicOn(cfg.enabled);
+        setWakeWordMuted(!cfg.enabled).catch(() => {});
+      })
+      .catch(() => {});
+    refreshConversations();
+  }, []);
+
+  function handleToggleMic() {
+    const next = !micOn;
+    setMicOn(next);
+    setWakeWordMuted(!next).catch(() => {});
+    saveMicWakeWord(next).catch(() => {
+      setMicOn(!next);
+      setWakeWordMuted(next).catch(() => {});
+    });
+  }
+
+  // New Chat clears only the transcript. Pending approvals stay in state (NFR-4).
+  function handleNewChat() {
+    startNewConversation()
+      .then(() => {
+        setTurns([]);
+        refreshConversations();
+      })
+      .catch(() => {});
+  }
+
+  function handleToggleHistory() {
+    if (!historyOpen) refreshConversations();
+    setHistoryOpen((open) => !open);
+  }
 
   // Rehydrate the transcript and orb config on launch.
   useEffect(() => {
@@ -105,6 +187,7 @@ export default function App() {
   useEffect(
     () =>
       subscribeInEffect(onVoiceState, (payload) => {
+        trackApprovalListening(payload.state);
         if (payload.state === "idle" && isBusy()) return;
         setOrbState(payload.state);
       }),
@@ -116,16 +199,26 @@ export default function App() {
   // (unlike typed messages, where that's opt-in via Settings).
   useEffect(
     () =>
-      subscribeInEffect(onTranscript, async ({ text }) => {
+      subscribeInEffect(onTranscript, async ({ text, listen_once }) => {
         if (!looksLikeSpeech(text)) {
           console.warn("Dropped non-speech transcript:", text);
           setOrbState("idle");
+          if (listen_once) listenAgainOrGiveUp();
           return;
         }
         // A ToolBox server is waiting on an answer: this utterance is the
         // answer, not a new request (with or without the wake word).
         if (approvalsRef.current.length > 0) {
+          stopListeningForAnswer();
           await answerApprovalByVoice(approvalsRef.current[0], text);
+          return;
+        }
+        // A listen-once recording is only ever an answer to a card. With no
+        // card waiting it's stray audio (live bug, 2026-11-22: Rigel's own
+        // spoken reply came back in as a message), never a new request.
+        if (listen_once) {
+          console.info("Dropped listen-once transcript with no approval waiting:", text);
+          setOrbState("idle");
           return;
         }
         voiceBusyRef.current = true;
@@ -165,9 +258,10 @@ export default function App() {
   // can be waiting on an answer (the sidecar holds the /chat open).
   useEffect(() => {
     if (chatsInFlight <= 0) {
+      if (approvalsRef.current.length > 0) cancelListenOnce().catch(() => {});
       approvalsRef.current = [];
       setToolboxApprovals([]);
-      setApprovalListening(false);
+      stopListeningForAnswer();
       return;
     }
     let stopped = false;
@@ -175,9 +269,15 @@ export default function App() {
       getToolboxApprovals()
         .then(({ approvals }) => {
           if (stopped) return;
+          const hadApprovals = approvalsRef.current.length > 0;
           approvalsRef.current = approvals;
           setToolboxApprovals(approvals);
-          if (approvals.length === 0) setApprovalListening(false);
+          if (approvals.length === 0) {
+            stopListeningForAnswer();
+            // The card went away (answered elsewhere, or the server stopped
+            // waiting): stop listening for an answer to it.
+            if (hadApprovals) cancelListenOnce().catch(() => {});
+          }
           for (const a of approvals) {
             if (announcedApprovalsRef.current.has(a.id)) continue;
             announcedApprovalsRef.current.add(a.id);
@@ -200,20 +300,61 @@ export default function App() {
     if (!voiceConfigRef.current.enabled) return;
     try {
       await speak(sentence, voiceConfigRef.current.tts_voice);
-      await listenOnce();
-      setApprovalListening(true);
+      await armListen();
     } catch (err) {
       console.error("Couldn't ask for approval out loud:", err);
-      setApprovalListening(false);
+      stopListeningForAnswer("click");
+    }
+  }
+
+  // Request one listen (the native side starts recording only once Rigel
+  // has finished speaking). The bars wait for the real "recording" state.
+  async function armListen() {
+    sawRecordingRef.current = false;
+    listenArmedRef.current = true;
+    setApprovalVoice("waiting");
+    await listenOnce();
+  }
+
+  function stopListeningForAnswer(next = null) {
+    listenArmedRef.current = false;
+    sawRecordingRef.current = false;
+    setApprovalVoice(next);
+  }
+
+  // A listen ended with nothing usable while the card is still waiting:
+  // listen again, a few times, then say so instead of pretending to listen.
+  function listenAgainOrGiveUp() {
+    if (!listenArmedRef.current || approvalsRef.current.length === 0) return;
+    if (relistensRef.current >= MAX_RELISTENS) {
+      stopListeningForAnswer("click");
+      return;
+    }
+    relistensRef.current += 1;
+    armListen().catch(() => stopListeningForAnswer("click"));
+  }
+
+  // Follow the native voice state for the listen we asked for.
+  function trackApprovalListening(state) {
+    if (!listenArmedRef.current || approvalsRef.current.length === 0) return;
+    if (state === "recording") {
+      sawRecordingRef.current = true;
+      setApprovalVoice("listening");
+    } else if (state === "thinking" && sawRecordingRef.current) {
+      setApprovalVoice("waiting"); // transcribing what it heard
+    } else if (state === "idle" && sawRecordingRef.current) {
+      // Ended with nothing usable: gave up waiting, empty transcript.
+      sawRecordingRef.current = false;
+      listenAgainOrGiveUp();
     }
   }
 
   function announceApproval(a) {
+    relistensRef.current = 0;
     askOutLoud(a.spoken);
   }
 
   async function answerApprovalByVoice(approval, text) {
-    setApprovalListening(false);
     setOrbState("thinking");
     try {
       const r = await interpretToolboxApproval(approval.id, text, "voice");
@@ -233,7 +374,10 @@ export default function App() {
     const left = approvalsRef.current.filter((a) => a.id !== updated.id);
     approvalsRef.current = left;
     setToolboxApprovals(left);
-    setApprovalListening(false);
+    stopListeningForAnswer();
+    // Answered by click: stop the spoken-answer recording, or it keeps
+    // running and picks up Rigel's own reply (live bug, 2026-11-22).
+    cancelListenOnce().catch(() => {});
   }
 
   // Header badge: is ToolBox reachable?
@@ -361,6 +505,13 @@ export default function App() {
   const displayCorner = minimized ? "center" : orbConfig.position_corner;
   const displayXPct = minimized ? null : orbConfig.x_pct;
   const displayYPct = minimized ? null : orbConfig.y_pct;
+  // Non-chat views dock the orb in the bottom-right corner inside the normal-size
+  // window; no OS-window shrink (PRD v6 FR-9). Minimizing still shrinks the window.
+  const docked = activeView !== "chat" && !minimized;
+  const orbDiameter = docked ? DOCKED_DIAMETER_PX : displayDiameter;
+  const orbCorner = docked ? "docked" : displayCorner;
+  const orbX = docked ? null : displayXPct;
+  const orbY = docked ? null : displayYPct;
 
   // Shrink the real OS window (not just the CSS orb) down to a small
   // borderless square while minimized, and restore it once expanded again.
@@ -390,6 +541,11 @@ export default function App() {
         <header className="brandline" data-tauri-drag-region>
           <span className="brand">RIGEL</span>
           <span className="brand-sub">Really Intelligent Graphical Execution Layer</span>
+          <select className="view-select" aria-label="Main view" value={activeView} onChange={(e) => setActiveView(e.target.value)}>
+            {VIEWS.map((v) => (
+              <option key={v.id} value={v.id}>{v.label}</option>
+            ))}
+          </select>
           <RunningApps />
           {toolboxStatus && toolboxStatus.state !== "disabled" && (
             <span
@@ -402,6 +558,13 @@ export default function App() {
                 : "ToolBox offline"}
             </span>
           )}
+          <ConversationControls
+            micOn={micOn}
+            onToggleMic={handleToggleMic}
+            onNewChat={handleNewChat}
+            historyOpen={historyOpen}
+            onToggleHistory={handleToggleHistory}
+          />
           <button
             className="settings-btn"
             onClick={() => setSettingsOpen(true)}
@@ -417,14 +580,23 @@ export default function App() {
         <RigelOrb
           state={orbState}
           caption={caption}
-          diameterPx={displayDiameter}
-          positionCorner={displayCorner}
-          positionXPct={displayXPct}
-          positionYPct={displayYPct}
+          diameterPx={orbDiameter}
+          positionCorner={orbCorner}
+          positionXPct={orbX}
+          positionYPct={orbY}
           isMinimized={minimized || orbConfig.is_minimized}
           onDrag={handleOrbDrag}
           onMinimizedDrag={handleMinimizedDrag}
         />
+        {activeView !== "chat" && <ViewArea view={activeView} />}
+        {!minimized && <BrainChip />}
+        {!minimized && historyOpen && (
+          <HistoryPanel
+            conversations={conversations}
+            activeId={activeConvId}
+            onClose={() => setHistoryOpen(false)}
+          />
+        )}
       </main>
 
       {/* Kept mounted (just hidden) while minimized so an in-flight send isn't torn down mid-request. */}
@@ -444,7 +616,7 @@ export default function App() {
           pendingCommands={pendingCommands}
           onCommandResolved={handleCommandResolved}
           toolboxApprovals={toolboxApprovals}
-          approvalListening={approvalListening}
+          approvalVoice={approvalVoice}
           onApprovalAnswered={handleApprovalAnswered}
         />
       </footer>

@@ -103,6 +103,134 @@ def _migrate(conn: sqlite3.Connection) -> None:
         """
     )
     conn.commit()
+    _migrate_conversations(conn)
+
+
+def _migrate_conversations(conn: sqlite3.Connection) -> None:
+    """Add the conversations table and turns.conversation_id (idempotent).
+
+    Existing turns are assigned to one default conversation so history is
+    kept. A DB backup is written before the first ALTER.
+    """
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS conversations (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            started_at TEXT    NOT NULL,
+            title      TEXT
+        );
+        """
+    )
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(turns)")}
+    if "conversation_id" not in cols:
+        has_turns = conn.execute("SELECT 1 FROM turns LIMIT 1").fetchone() is not None
+        if has_turns:
+            _backup_before_migration(conn)  # only existing data needs protecting
+        conn.execute(
+            "ALTER TABLE turns ADD COLUMN conversation_id INTEGER "
+            "REFERENCES conversations (id)"
+        )
+        if has_turns:
+            cur = conn.execute(
+                "INSERT INTO conversations (started_at, title) VALUES (?, ?)",
+                (_now(), "Earlier conversation"),
+            )
+            conn.execute(
+                "UPDATE turns SET conversation_id = ? WHERE conversation_id IS NULL",
+                (cur.lastrowid,),
+            )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_turns_conversation ON turns(conversation_id)"
+    )
+    conn.commit()
+
+
+def _backup_before_migration(conn: sqlite3.Connection) -> None:
+    """Copy the DB file aside before a schema change. In-memory DBs have no file."""
+    row = conn.execute("PRAGMA database_list").fetchone()
+    file_path = row[2] if row else ""
+    if not file_path:
+        return
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    backup = Path(f"{file_path}.pre-conversations-{stamp}.bak")
+    if not backup.exists():
+        conn.execute("PRAGMA wal_checkpoint(FULL)")  # fold WAL into the main file first
+        backup.write_bytes(Path(file_path).read_bytes())
+
+
+# ── conversations ──────────────────────────────────────────────────────────
+
+def _active_conversation_id(conn: sqlite3.Connection) -> int:
+    """Id of the newest conversation; creates one if none exists. Caller holds _LOCK."""
+    row = conn.execute("SELECT MAX(id) FROM conversations").fetchone()
+    if row and row[0] is not None:
+        return int(row[0])
+    cur = conn.execute(
+        "INSERT INTO conversations (started_at, title) VALUES (?, ?)", (_now(), None)
+    )
+    conn.commit()
+    return int(cur.lastrowid)
+
+
+def active_conversation_id() -> int:
+    conn = connect()
+    with _LOCK:
+        return _active_conversation_id(conn)
+
+
+def start_new_conversation(title: str | None = None) -> int:
+    """Start a fresh conversation. Older turns stay in the DB, untouched."""
+    conn = connect()
+    with _LOCK:
+        cur = conn.execute(
+            "INSERT INTO conversations (started_at, title) VALUES (?, ?)", (_now(), title)
+        )
+        conn.commit()
+        return int(cur.lastrowid)
+
+
+def list_conversations(limit: int = 100) -> list[dict]:
+    conn = connect()
+    rows = conn.execute(
+        "SELECT c.id, c.started_at, c.title, COUNT(t.id) AS turn_count "
+        "FROM conversations c LEFT JOIN turns t ON t.conversation_id = c.id "
+        "GROUP BY c.id ORDER BY c.id DESC LIMIT ?", (limit,)
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def conversation_history(conversation_id: int, before_turn_id: int, limit: int = 20) -> list[dict]:
+    """Earlier turns of one conversation as chat messages for the model.
+
+    Rigel's replies become 'assistant'. Consecutive same-role turns are merged
+    and a leading assistant turn is dropped, so roles alternate and start with
+    'user' (what the Claude API expects). The current turn is excluded.
+    """
+    conn = connect()
+    rows = conn.execute(
+        "SELECT role, text FROM turns WHERE conversation_id = ? AND id < ? "
+        "ORDER BY id DESC LIMIT ?",
+        (conversation_id, before_turn_id, limit),
+    ).fetchall()
+    msgs: list[dict] = []
+    for r in reversed(rows):
+        role = "user" if r["role"] == "user" else "assistant"
+        if msgs and msgs[-1]["role"] == role:
+            msgs[-1]["content"] += "\n" + r["text"]
+        else:
+            msgs.append({"role": role, "content": r["text"]})
+    while msgs and msgs[0]["role"] != "user":
+        msgs.pop(0)
+    return msgs
+
+
+def conversation_turns(conversation_id: int) -> list[dict]:
+    conn = connect()
+    rows = conn.execute(
+        "SELECT id, ts, role, text FROM turns WHERE conversation_id = ? ORDER BY id",
+        (conversation_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
 
 
 # ── writes ─────────────────────────────────────────────────────────────────
@@ -110,9 +238,10 @@ def _migrate(conn: sqlite3.Connection) -> None:
 def log_turn(role: str, text: str) -> int:
     conn = connect()
     with _LOCK:
+        conv_id = _active_conversation_id(conn)
         cur = conn.execute(
-            "INSERT INTO turns (ts, role, text) VALUES (?, ?, ?)",
-            (_now(), role, text),
+            "INSERT INTO turns (ts, role, text, conversation_id) VALUES (?, ?, ?, ?)",
+            (_now(), role, text, conv_id),
         )
         conn.commit()
         return int(cur.lastrowid)

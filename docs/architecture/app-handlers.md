@@ -254,9 +254,15 @@ This second flow is deliberate, not incidental: both `chrome.py` and
 `vscode.py`'s system prompts explicitly instruct the model to call no tool
 at all when the utterance is really about launching or quitting the
 app, so the shared four-verb pass and the handler's scoped call never
-fight over the same intent. There is no code-level de-duplication between
-the two passes — the design relies entirely on each handler's system
-prompt drawing the line correctly (see Alternative Approaches Considered
+fight over the same intent. The reverse case is de-duplicated in code
+(`brain._with_app_commands`, 2026-11-16): when the handler *does* return an
+`app_action`, a generic `open_app` for the same app from the shared pass is
+dropped, since every handler action already launches or focuses its app.
+Live, "open a new Chrome tab to github.com" had produced both
+`open_app Chrome` and `chrome.new_tab` (two approvals); it now produces only
+the `app_action`, and "open Chrome" alone still produces only `open_app`.
+Nothing other than `open_app` is ever dropped. Beyond that, the design relies
+on each handler's system prompt drawing the line correctly (see Alternative Approaches Considered
 in `docs/proposals/expanded-app-control.md` for the general shape of this
 decision, and the source doc's Known Limitations for the corresponding
 caveat that `registry.match()` still runs the handler's LLM call on text

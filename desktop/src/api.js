@@ -73,3 +73,17 @@ export const interpretToolboxApproval = (id, text, via = "voice") =>
     method: "POST",
     body: JSON.stringify({ text, via }),
   });
+
+// ── New Chat, history, and mute (P2) ───────────────────────────────────────
+export const getMicWakeWord = () => req("/api/rigel/settings/mic-wake-word");
+export const saveMicWakeWord = (enabled) =>
+  req("/api/rigel/settings/mic-wake-word", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled }),
+  });
+export const listConversations = () => req("/api/rigel/conversations");
+export const startNewConversation = () =>
+  req("/api/rigel/conversations/new", { method: "POST" });
+export const getConversationTurns = (id) =>
+  req(`/api/rigel/conversations/${id}/turns`);

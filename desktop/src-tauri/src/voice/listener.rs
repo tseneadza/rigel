@@ -56,6 +56,8 @@ enum Mode {
         speech_threshold: f32,
         chunk_levels: Vec<f32>,
         onset_grace: Duration,
+        /// Started by listen-once (no wake word) rather than the wake word.
+        listen_once: bool,
     },
 }
 
@@ -213,6 +215,7 @@ fn run(app: AppHandle, wakeword_path: PathBuf, stop_flag: Arc<AtomicBool>) -> Re
     let mut last_status = Instant::now();
     let mut noise_floor: f32 = 0.0;
     let mut gated_last_chunk = false;
+    let mut muted_last_chunk = false;
     loop {
         if stop_flag.load(Ordering::SeqCst) {
             break;
@@ -289,7 +292,26 @@ fn run(app: AppHandle, wakeword_path: PathBuf, stop_flag: Arc<AtomicBool>) -> Re
                         speech_threshold,
                         chunk_levels: Vec::with_capacity(512),
                         onset_grace: LISTEN_ONCE_ONSET_GRACE,
+                        listen_once: true,
                     };
+                    continue;
+                }
+
+                // Muted (FR-18): the wake word is ignored. Listen-once above still
+                // works, so a pending approval can be answered by voice.
+                if super::wake_word_muted() {
+                    if !muted_last_chunk {
+                        log::info!("voice listener: wake word muted by user");
+                        muted_last_chunk = true;
+                    }
+                    frame_buffer.clear();
+                    continue;
+                }
+                if muted_last_chunk {
+                    muted_last_chunk = false;
+                    rustpotter.reset();
+                    frame_buffer.clear();
+                    log::info!("voice listener: wake word unmuted, detector reset");
                     continue;
                 }
 
@@ -327,6 +349,7 @@ fn run(app: AppHandle, wakeword_path: PathBuf, stop_flag: Arc<AtomicBool>) -> Re
                         speech_threshold,
                         chunk_levels: Vec::with_capacity(512),
                         onset_grace: SPEECH_ONSET_GRACE,
+                        listen_once: false,
                     };
                 }
             }
@@ -338,7 +361,32 @@ fn run(app: AppHandle, wakeword_path: PathBuf, stop_flag: Arc<AtomicBool>) -> Re
                 speech_threshold,
                 chunk_levels,
                 onset_grace,
+                listen_once,
             } => {
+                // Never record Rigel's own voice: if it starts speaking while
+                // we're recording, drop the recording (the mute above only
+                // covers Listening). And drop a listen-once whose approval was
+                // answered another way. Live bug (2026-11-22): a click-approved
+                // card left the recording running; it captured Rigel's spoken
+                // reply, which came back in as a user message.
+                let rigel_talking = super::tts_blocks_listening();
+                let cancelled = *listen_once && super::take_cancel_listen_once();
+                if rigel_talking || cancelled {
+                    log::info!(
+                        "voice listener: recording dropped ({}), {:.2}s discarded, listen_once={}",
+                        if rigel_talking { "Rigel started speaking" } else { "listen-once cancelled" },
+                        buffer.len() as f32 / sample_rate as f32 / channels as f32,
+                        *listen_once
+                    );
+                    mode = Mode::Listening;
+                    frame_buffer.clear();
+                    rustpotter.reset();
+                    while rx.try_recv().is_ok() {}
+                    if !rigel_talking {
+                        let _ = app.emit("voice://state", serde_json::json!({ "state": "idle" }));
+                    }
+                    continue;
+                }
                 let level = rms(&chunk);
                 chunk_levels.push(level);
                 if level > *speech_threshold {
@@ -366,6 +414,7 @@ fn run(app: AppHandle, wakeword_path: PathBuf, stop_flag: Arc<AtomicBool>) -> Re
                         "gave up waiting for speech"
                     };
                     let had_speech = *heard_speech;
+                    let was_listen_once = *listen_once;
                     let dump = dump_debug_wav(
                         &recorded,
                         sample_rate,
@@ -407,7 +456,7 @@ fn run(app: AppHandle, wakeword_path: PathBuf, stop_flag: Arc<AtomicBool>) -> Re
                         Ok(_) if stop_for_stt.load(Ordering::SeqCst) => {}
                         Ok(text) if !text.is_empty() => {
                             log::info!("voice listener: transcript = {text:?}");
-                            let _ = app_for_stt.emit("voice://transcript", serde_json::json!({ "text": text }));
+                            let _ = app_for_stt.emit("voice://transcript", serde_json::json!({ "text": text, "listen_once": was_listen_once }));
                         }
                         Ok(_) => {
                             log::info!("voice listener: transcript empty / non-speech, dropped");

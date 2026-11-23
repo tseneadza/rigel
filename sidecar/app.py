@@ -51,7 +51,9 @@ Forked in spirit from AgenticOS's sidecar; intentionally self-contained
 """
 from __future__ import annotations
 
+import logging
 import os
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -63,6 +65,22 @@ from sidecar.handlers import menu_actions, registry
 RIGEL_PORT = int(os.getenv("RIGEL_PORT", "5140"))
 
 app = FastAPI(title="Rigel Sidecar", version="0.1.0")
+
+
+def _setup_approval_audit_log() -> None:
+    """Approval decisions go to their own file, so every approve, decline or
+    expiry can be traced to how it was given (click, voice or typed)."""
+    log_dir = Path.home() / "Library" / "Logs" / "com.tonyseneadza.rigel"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    audit = logging.getLogger("rigel.approvals")
+    if not any(isinstance(h, logging.FileHandler) for h in audit.handlers):
+        handler = logging.FileHandler(log_dir / "approvals.log", encoding="utf-8")
+        handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+        audit.addHandler(handler)
+    audit.setLevel(logging.INFO)
+
+
+_setup_approval_audit_log()
 
 app.add_middleware(
     CORSMiddleware,
@@ -146,6 +164,10 @@ class WhitelistConfig(BaseModel):
     click_menu_item: dict[str, MenuActionWhitelist] = {}  # keyed by app process name
 
 
+class MicWakeWordConfig(BaseModel):
+    enabled: bool = True          # wake-word listening on; off = muted (FR-18)
+
+
 @app.get("/api/rigel/health")
 def health() -> dict:
     return {"ok": True, "service": "rigel-sidecar", "version": "0.1.0"}
@@ -160,11 +182,12 @@ def state() -> dict:
 @app.post("/api/rigel/chat")
 def chat(body: ChatIn) -> dict:
     user_turn_id = db.log_turn("user", body.text)
+    history = db.conversation_history(db.active_conversation_id(), user_turn_id)
 
     llm_config = db.get_setting("llm_config")
     whitelist = db.get_setting("whitelist_config")
     toolbox_config = {**ToolBoxConfig().model_dump(), **(db.get_setting("toolbox_config") or {})}
-    result = brain.respond_with_tools(body.text, llm_config, toolbox_config)
+    result = brain.respond_with_tools(body.text, llm_config, toolbox_config, history=history)
     reply, commands = result["reply"], result["commands"]
 
     logged = []
@@ -385,6 +408,40 @@ def _validate_llm_config(config: LLMConfig) -> tuple[bool, str]:
         if not config.ollama_host:
             return False, "ollama_host is required when provider is 'ollama'"
     return True, ""
+
+
+_MIC_WAKE_WORD_KEY = "mic_wake_word_enabled"
+
+
+@app.get("/api/rigel/settings/mic-wake-word")
+def get_mic_wake_word() -> dict:
+    """Mute state (NFR-2). Default on when nothing has been saved yet."""
+    config = db.get_setting(_MIC_WAKE_WORD_KEY)
+    return {"enabled": bool(config["enabled"]) if config else True}
+
+
+@app.post("/api/rigel/settings/mic-wake-word")
+def save_mic_wake_word(body: MicWakeWordConfig) -> dict:
+    db.set_setting(_MIC_WAKE_WORD_KEY, {"enabled": body.enabled})
+    return {"ok": True, "enabled": body.enabled}
+
+
+@app.get("/api/rigel/conversations")
+def list_conversations() -> dict:
+    """History list (FR-16). Newest first; the active one is marked."""
+    return {"active_id": db.active_conversation_id(),
+            "conversations": db.list_conversations()}
+
+
+@app.post("/api/rigel/conversations/new")
+def new_conversation() -> dict:
+    """New Chat (FR-15/FR-17). Older transcripts stay in history; nothing is deleted."""
+    return {"ok": True, "id": db.start_new_conversation()}
+
+
+@app.get("/api/rigel/conversations/{conversation_id}/turns")
+def conversation_turns(conversation_id: int) -> dict:
+    return {"turns": db.conversation_turns(conversation_id)}
 
 
 @app.get("/api/rigel/settings/llm-config")

@@ -168,18 +168,20 @@ def test_need_query_drops_paths():
     assert tool_brain._clean_intent("/only/a/path") == "/only/a/path"
 
 
-def test_punctuation_only_guess_is_corrected_to_the_real_tool(monkeypatch):
+def test_punctuation_only_guess_is_corrected_to_the_real_tool(monkeypatch, tmp_path):
+    real = tmp_path / "x"
+    real.write_text("x")
     """Regression (live, llama3.1:8b): guessed 'osa-system fs delete'."""
     fake = FakeToolBox()
     fake.need = lambda url, intent, limit=8: (json.dumps({"matches": [{"tool": "osa-system.fs.delete"}]}), False)
     monkeypatch.setattr(toolbox_client, "client", lambda: fake)
     _script(monkeypatch, [
-        {"content": "", "tool_calls": [_tc("toolbox_call", {"tool": "osa-system fs delete", "path": "/tmp/x"})]},
+        {"content": "", "tool_calls": [_tc("toolbox_call", {"tool": "osa-system fs delete", "path": str(real)})]},
         {"content": "", "tool_calls": [_tc("respond", {"reply": "Deleted.", "commands": []})]},
     ])
     out = brain.respond_with_tools("delete /tmp/x", LLM, {"enabled": True})
     assert fake.calls == [("call", "osa-system.fs.delete")]
-    assert out["tool_steps"][-1]["arguments"] == {"path": "/tmp/x"}
+    assert out["tool_steps"][-1]["arguments"] == {"path": str(real)}
 
 
 def _step(status="ok", via=None):
@@ -224,7 +226,7 @@ def test_found_but_not_called_gets_one_nudge(monkeypatch):
 
 def test_claimed_action_without_a_call_is_replaced():
     out = tool_brain._sanitize_reply("I've called osa-system.fs.delete with the path. Please approve.", [], [])
-    assert "didn't actually run it" in out
+    assert "nothing has changed" in out
     assert tool_brain._sanitize_reply("I couldn't find a tool for that.", [], []) == "I couldn't find a tool for that."
 
 

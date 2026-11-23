@@ -164,7 +164,8 @@ TOOLBOX_OFFLINE_NOTE = (
 )
 
 
-def respond_with_tools(text: str, llm_config: dict | None, toolbox_config: dict | None) -> dict:
+def respond_with_tools(text: str, llm_config: dict | None, toolbox_config: dict | None,
+                       history: list[dict] | None = None) -> dict:
     """``respond()`` plus ToolBox tool use. Returns ``{reply, commands,
     tool_steps, toolbox}`` where ``toolbox`` is ``{state, detail?}``:
     'used' (tool loop ran), 'offline' (ToolBox unreachable — answered
@@ -196,7 +197,7 @@ def respond_with_tools(text: str, llm_config: dict | None, toolbox_config: dict 
     commands: list[dict] = []
     if enabled and supported:
         try:
-            reply, commands, steps = tool_brain.respond(text, llm_config, toolbox_config)
+            reply, commands, steps = tool_brain.respond(text, llm_config, toolbox_config, history)
         except ToolBoxUnavailable as e:
             logger.warning("ToolBox unavailable (%s); answering without tools.", e)
             out["toolbox"] = {"state": "offline", "detail": str(e)}
@@ -208,7 +209,7 @@ def respond_with_tools(text: str, llm_config: dict | None, toolbox_config: dict 
             out["toolbox"] = {"state": "used" if steps else "available"}
             out["tool_steps"] = [s.public() for s in steps]
             if provider == "claude":
-                commands = commands + _app_commands(text, llm_config)
+                commands = _with_app_commands(commands, text, llm_config)
     elif enabled:
         out["toolbox"] = {"state": "unsupported",
                           "detail": f"{provider} can't use tools" if provider != "ollama"
@@ -216,7 +217,7 @@ def respond_with_tools(text: str, llm_config: dict | None, toolbox_config: dict 
 
     if reply is None:
         extra = TOOLBOX_OFFLINE_NOTE if out["toolbox"]["state"] == "offline" else ""
-        reply, commands = _respond_via_provider(text, llm_config, extra)
+        reply, commands = _respond_via_provider(text, llm_config, extra, history)
 
     # Menu-action fallback only when ToolBox didn't already handle the turn:
     # after a tool answered, a fuzzy menu note ("could be File > New File…")
@@ -230,7 +231,8 @@ def respond_with_tools(text: str, llm_config: dict | None, toolbox_config: dict 
     return out
 
 
-def _respond_via_provider(text: str, llm_config: dict | None, extra_system: str = "") -> tuple[str, list[dict]]:
+def _respond_via_provider(text: str, llm_config: dict | None, extra_system: str = "",
+                          history: list[dict] | None = None) -> tuple[str, list[dict]]:
     """The original provider dispatch (stub, Claude, or Ollama), unchanged
     in behavior — split out of ``respond()`` so Slice 3's read-only menu
     note can be layered on top of *any* provider's result in one place,
@@ -239,11 +241,11 @@ def _respond_via_provider(text: str, llm_config: dict | None, extra_system: str 
 
     if provider == "claude":
         try:
-            reply, commands = llm_providers.claude_respond(text, llm_config["claude_model"], extra_system)
+            reply, commands = llm_providers.claude_respond(text, llm_config["claude_model"], extra_system, history)
         except llm_providers.LLMError as e:
             logger.warning("Claude brain failed (%s); falling back to stub.", e)
         else:
-            return reply, commands + _app_commands(text, llm_config)
+            return reply, _with_app_commands(commands, text, llm_config)
     elif provider == "ollama":
         try:
             return llm_providers.ollama_respond(
@@ -251,6 +253,7 @@ def _respond_via_provider(text: str, llm_config: dict | None, extra_system: str 
                 llm_config["ollama_model"],
                 llm_config.get("ollama_host", llm_providers.DEFAULT_OLLAMA_HOST),
                 extra_system,
+                history,
             )
         except llm_providers.LLMError as e:
             logger.warning("Ollama brain failed (%s); falling back to stub.", e)
@@ -272,6 +275,27 @@ def _running_apps_reply(text: str) -> str | None:
     if not apps:
         return "I couldn't find any open apps."
     return "Open apps: " + ", ".join(apps) + "."
+
+
+def _with_app_commands(commands: list[dict], text: str, llm_config: dict) -> list[dict]:
+    """``commands`` plus any per-app handler commands for ``text``. When a
+    handler claims the turn, a generic ``open_app`` for that same app is
+    dropped: every handler action already launches or focuses its app, so
+    "open a new Chrome tab to github.com" was asking for two approvals
+    (``open_app Chrome`` + ``chrome.new_tab``; seen live 2026-11-16). Only
+    ``open_app`` is dropped — anything else the brain proposed is kept."""
+    app_commands = _app_commands(text, llm_config)
+    if not app_commands:
+        return commands
+    claimed = {c["args"].get("app_id") for c in app_commands if c.get("action") == "app_action"}
+
+    def redundant(c: dict) -> bool:
+        if c.get("action") != "open_app":
+            return False
+        handler = registry.match(str(c.get("args", {}).get("target", "")))
+        return handler is not None and handler.app_id in claimed
+
+    return [c for c in commands if not redundant(c)] + app_commands
 
 
 def _app_commands(text: str, llm_config: dict) -> list[dict]:
