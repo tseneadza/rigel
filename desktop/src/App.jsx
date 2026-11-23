@@ -48,7 +48,7 @@ const APPROVAL_POLL_MS = 600;
 const TOOLBOX_STATUS_POLL_MS = 20000;
 // How many times to listen again for a spoken answer after a listen ends
 // with nothing usable (a cough, a click, silence), before "click to answer".
-const MAX_RELISTENS = 3;
+const MAX_RELISTENS = 2; // re-listens after the first listen: 3 empty listens in total
 
 // Fallback only — used before orbConfig has loaded from the sidecar; the
 // real minimized size comes from orbConfig.min_diameter_px (Settings → Orb).

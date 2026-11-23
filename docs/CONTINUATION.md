@@ -4,6 +4,41 @@ Read this first at the start of every Rigel session. Newest entry on top.
 
 ---
 
+## Voice approval fix: grunts must never approve (2026-11-23, branch `fix/voice-approval-noise`)
+
+**Branch:** `fix/voice-approval-noise` (from `ec50782`) · **Not committed yet**. Commit when Tony asks.
+
+**What happened (live, 00:24 local):** Tony asked "Use the toolbox to delete the scratch.txt file in my Rigio folder." The approval card then listened without a wake word and got four transcripts: "♪ Scenes from a house ♪ Eh.", "Here we go. Ugh.", "Goodbye, wow.", and "Mm-hmm" (no-speech probability 0.55). Tony was only grunting, but the last one was treated as "approved by voice" and scratch.txt was deleted. Tony did not click or say yes. The card never showed "click to answer".
+
+**Cause (inferred; the log doesn't record the classifier's output):** `interpret()` in `sidecar/approvals.py` sends any unclear answer to the language model. Approvals use the same `llm_config` as the brain (saved brain: Ollama `minimax-h3-prompt-enhancer`, which the handoff describes as not a tool-use model). That model said "approve" for a grunt.
+
+**Fix (in `sidecar/approvals.py`):**
+- `_is_filler()`: grunts and hums ("mm", "hmm", "uh huh", "ugh", "huh") never reach the model and return `unclear`.
+- A model "approve" is accepted only when the answer starts with a clear yes word (`_clear_yes_start`), with no negation and no hedge. Otherwise it is downgraded to `unclear`.
+- Keyword "approve" and "decline" logic is unchanged. A long, clear yes still goes to the model, as before.
+
+**Verified:**
+- `sidecar/tests/test_approvals.py`: 56 pass on the Linux VM (pytest installed into `~/pytest-lib`, stdlib-only code). 14 of the new or changed tests fail on the old `HEAD` code, so they do catch this bug.
+- Not run: the rest of the sidecar test suite (FastAPI and anthropic not installed here). Run `.venv/bin/python -m pytest` on the Mac before committing.
+- **Not verified live.** Needs a retest with the TV muted.
+
+**Known gaps (not fixed):**
+1. A keyword yes from TV dialogue can still approve. Fixing this means gating listen-once transcripts on the speech-to-text no-speech probability in the Rust listener. That is a separate change.
+2. `.claude/skills/approval-gate-validation` describes a Rust layout (`src/approval/gates.toml`, `engine.rs`) that doesn't exist in Rigel. The skill needs rewriting for the Python sidecar.
+3. Speech-to-text hears "Rigel" as "Rigio" and "Rigero". Voice-pipeline work.
+4. The speech threshold can stay high for minutes after a loud noise (rms spike near 00:14 raised it from 0.003 to about 0.03).
+
+**Update 2026-11-23 00:45 local:**
+- The second deletion at 00:41 was approved by Tony's click on Approve. The first request timed out without approval, which is correct. The earlier 00:24 deletion was a voice approval from a grunt, which the fix addresses.
+- Added approval audit logging: `sidecar/approvals.py` logs every open, heard transcript (with its keyword decision), approval, decline and expiry with how it was answered. The sidecar writes it to `~/Library/Logs/com.tonyseneadza.rigel/approvals.log` (set up in `sidecar/app.py`). Verified with a temp file. Clicks are logged by the answer endpoint path, not yet checked live.
+- Retry cap decided by Tony (00:55): three empty listens in total, then "click to answer". Changed `MAX_RELISTENS` from 3 to 2 in `desktop/src/App.jsx` (the first listen plus two re-listens). NOT tested: `vite build` and Vitest need the Mac.
+- Log tip: the Python sidecar is not started by the Tauri app, so the approval audit file is the only place its decisions show up.
+
+**Next steps:**
+1. Review `git diff` on `fix/voice-approval-noise`, then run the sidecar suite on the Mac.
+2. Retest with the TV muted. Create a disposable file, then ask for its deletion. Say nothing, or say "no" to decline. Expect follow-up questions, no approval, and the file kept. Watch for the bars and "click to answer", and note the result in this file.
+3. Decide with Tony on gap 1 before anyone relies on voice approvals for deletes.
+
 ## ToolBox follow-up fixes + PR (2026-11-22)
 
 **Branch:** `feature/rigel-view-screens-p2` (pushed) · **Draft PR:** https://github.com/tseneadza/rigel/pull/2 (persona + View Screens P1/P2 + these fixes; review before merging)

@@ -20,6 +20,7 @@ Safety rules (approval-gate-validation):
 from __future__ import annotations
 
 import json
+import logging
 import re
 import threading
 import uuid
@@ -30,6 +31,10 @@ _LOCK = threading.Lock()
 _APPROVALS: dict[str, "Approval"] = {}
 _ORDER: list[str] = []
 _KEEP = 50  # resolved approvals kept around for the desktop to read back
+
+# Audit trail: every approval's open, answer and expiry is logged, so a
+# decision can always be traced to how it was given (click, voice or typed).
+logger = logging.getLogger("rigel.approvals")
 
 
 @dataclass
@@ -57,6 +62,7 @@ class Approval:
                 return False
             self.status = "approved" if decision == "approve" else "declined"
             self.answered_via = via
+        logger.info("approval %s %s via=%s tool=%s", self.id, self.status, via, self.tool)
         self._event.set()
         return True
 
@@ -66,6 +72,7 @@ class Approval:
                 return
             self.status = "expired"
             self.detail = detail
+        logger.info("approval %s expired tool=%s: %s", self.id, self.tool, detail)
         self._event.set()
 
     def public(self) -> dict:
@@ -114,6 +121,7 @@ def open_approval(tool: str, message: str, schema: dict) -> Approval:
         spoken=_spoken_summary(tool, message),
         created_at=datetime.now(timezone.utc).isoformat(),
     )
+    logger.info("approval %s opened tool=%s", a.id, a.tool)
     with _LOCK:
         _APPROVALS[a.id] = a
         _ORDER.append(a.id)
@@ -179,9 +187,30 @@ _HEDGE = re.compile(
     r"\b(?:maybe|i guess|i think|not sure|perhaps|probably|hmm+|um+|uh+|hold on|wait|let me think)\b|\?$", re.I)
 
 
-def _keyword_decision(text: str) -> str:
+def _normalize(text: str) -> str:
     t = re.sub(r"[.!,]+", " ", text.strip()).strip()
-    t = re.sub(r"^(?:rigel|um+|uh+|so|well)\s+", "", t, flags=re.I).strip()
+    return re.sub(r"^(?:rigel|um+|uh+|so|well)\s+", "", t, flags=re.I).strip()
+
+
+# Grunts, hums and fillers. Speech-to-text turns room noise and TV sound into
+# these ("Mm-hmm", "Ugh"), so they must never reach the language model.
+_FILLER_WORD = re.compile(
+    r"^(?:m+|h+m+|m+h+m+|mm-?hmm+|uh-?huh|u+h+|u+m+|a+h+|o+h+|e+h+|e+r+|u+g+h+|huh|hm+)$", re.I)
+
+
+def _is_filler(text: str) -> bool:
+    words = [w for w in re.split(r"[\s.,!?;:…\-]+", text.strip()) if w and not re.fullmatch(r"[\W_]+", w)]
+    return not words or all(_FILLER_WORD.fullmatch(w) for w in words)
+
+
+def _clear_yes_start(text: str) -> bool:
+    """True only for an answer that starts with a yes word and has no
+    negation and no hedge. The only shape the language model may approve."""
+    return bool(_YES.search(_normalize(text))) and not _NO.search(text) and not _HEDGE.search(text.strip())
+
+
+def _keyword_decision(text: str) -> str:
+    t = _normalize(text)
     if not t:
         return "unclear"
     yes = bool(_YES.search(t))
@@ -247,11 +276,16 @@ def interpret(approval: Approval, text: str, llm_config: dict | None, via: str =
     is consulted only when keywords can't decide. A keyword 'approve' is
     trusted only for short answers — a long sentence goes to the LLM."""
     decision = _keyword_decision(text)
+    logger.info("approval %s heard via=%s text=%r keyword=%s", approval.id, via, text, decision)
     follow_up = ""
     if decision == "approve" and len(text.split()) > 6:
         decision = "unclear"
-    if decision == "unclear":
+    if decision == "unclear" and not _is_filler(text):
         decision, follow_up = _llm_decision(approval.spoken, text, llm_config)
+        # Approval is for a clear yes only. A model that says "approve" about
+        # a grunt, noise or a hedged or mixed answer is downgraded to unclear.
+        if decision == "approve" and not _clear_yes_start(text):
+            decision = "unclear"
     if decision in ("approve", "decline"):
         applied = approval.resolve(decision, via)
         if not applied:

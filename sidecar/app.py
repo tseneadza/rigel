@@ -51,7 +51,9 @@ Forked in spirit from AgenticOS's sidecar; intentionally self-contained
 """
 from __future__ import annotations
 
+import logging
 import os
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -63,6 +65,22 @@ from sidecar.handlers import menu_actions, registry
 RIGEL_PORT = int(os.getenv("RIGEL_PORT", "5140"))
 
 app = FastAPI(title="Rigel Sidecar", version="0.1.0")
+
+
+def _setup_approval_audit_log() -> None:
+    """Approval decisions go to their own file, so every approve, decline or
+    expiry can be traced to how it was given (click, voice or typed)."""
+    log_dir = Path.home() / "Library" / "Logs" / "com.tonyseneadza.rigel"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    audit = logging.getLogger("rigel.approvals")
+    if not any(isinstance(h, logging.FileHandler) for h in audit.handlers):
+        handler = logging.FileHandler(log_dir / "approvals.log", encoding="utf-8")
+        handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+        audit.addHandler(handler)
+    audit.setLevel(logging.INFO)
+
+
+_setup_approval_audit_log()
 
 app.add_middleware(
     CORSMiddleware,

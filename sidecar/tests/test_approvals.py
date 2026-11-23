@@ -110,3 +110,39 @@ def test_pending_lists_only_open():
     ids = {p["id"] for p in approvals.pending()}
     assert a.id in ids and b.id not in ids
     a.resolve("decline", "click")
+
+
+# --- 2026-11-23 live bug: a grunt approved a file deletion -------------------
+# The four listen-once transcripts from that run, plus the worst case: a model
+# that says "approve" about any of them. None may approve.
+@pytest.mark.parametrize("text", ["Mm-hmm", "mm", "uh huh", "Ugh", "Here we go. Ugh.", "Goodbye, wow.",
+                                  "\u266a Scenes from a house \u266a Eh.", "Hmm...", "huh"])
+def test_noise_never_approves_even_if_llm_says_approve(monkeypatch, text):
+    monkeypatch.setattr(approvals, "_llm_decision", lambda q, a, c: ("approve", ""))
+    a = _new()
+    r = approvals.interpret(a, text, None)
+    assert r["decision"] == "unclear" and a.status == "pending" and r["follow_up"]
+
+
+@pytest.mark.parametrize("text", ["Here we go, the answer is probably yes",
+                                  "yes, no wait", "yes I guess", "I think yes"])
+def test_llm_approve_needs_a_clear_yes_at_the_start(monkeypatch, text):
+    monkeypatch.setattr(approvals, "_llm_decision", lambda q, a, c: ("approve", ""))
+    a = _new()
+    assert approvals.interpret(a, text, None)["decision"] == "unclear"
+    assert a.status == "pending"
+
+
+def test_llm_still_approves_a_clear_long_yes(monkeypatch):
+    # Long but unambiguous: the model may still approve, as before.
+    monkeypatch.setattr(approvals, "_llm_decision", lambda q, a, c: ("approve", ""))
+    a = _new()
+    assert approvals.interpret(a, "absolutely fine by me, go on then", None)["decision"] == "approve"
+
+
+def test_filler_never_reaches_the_llm(monkeypatch):
+    calls = []
+    monkeypatch.setattr(approvals, "_llm_decision", lambda q, a, c: calls.append(a) or ("approve", ""))
+    a = _new()
+    approvals.interpret(a, "Mm-hmm", None)
+    assert calls == []
