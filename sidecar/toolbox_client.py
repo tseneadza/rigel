@@ -267,5 +267,22 @@ def status(config: dict) -> dict:
         "url": url,
         "servers": len(servers),
         "tools": sum(int(s.get("tools") or 0) for s in servers.values()),
+        "server_rows": server_rows(servers),
         "latency_ms": round((time.monotonic() - started) * 1000),
     }
+
+
+def server_rows(servers: dict) -> list[dict]:
+    """One row per ToolBox server for the Toolbox map. The state is ToolBox's
+    own label (running, starting, stopping, cold, ...), passed through as-is.
+    ``error`` is ToolBox's ``last_error`` (None when there is none)."""
+    rows = []
+    for name, info in sorted(servers.items()):
+        info = info if isinstance(info, dict) else {}
+        rows.append({
+            "name": name,
+            "state": str(info.get("state") or "unknown"),
+            "tools": int(info.get("tools") or 0),
+            "error": info.get("last_error") or None,
+        })
+    return rows

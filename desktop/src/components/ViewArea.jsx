@@ -1,14 +1,18 @@
 /**
  * ViewArea — the main content area for non-chat views (PRD v6 FR-3, FR-4).
- * Placeholders for P1: the live ToolBox graphic and Rigel's presentation
- * content are not wired yet.
+ * Toolbox shows the live ToolBox map (M2 v2). Presentation is still a placeholder.
  */
-export default function ViewArea({ view }) {
+import ToolBoxMap from "./ToolBoxMap.jsx";
+export default function ViewArea({ view, toolbox }) {
   if (view === "toolbox") {
     return (
       <section className="view-area" aria-label="Toolbox view">
-        <h2>ToolBox</h2>
-        <p>The live ToolBox graphic is not wired yet.</p>
+        <ToolBoxMap
+          serverRows={toolbox?.serverRows ?? []}
+          mode={toolbox?.mode ?? "2d"}
+          fallbackReason={toolbox?.fallbackReason ?? null}
+          hubState={toolbox?.hubState ?? "offline"}
+        />
       </section>
     );
   }

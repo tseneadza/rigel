@@ -4,6 +4,8 @@ import ChatConsole from "./components/ChatConsole.jsx";
 import SettingsPanel from "./components/SettingsPanel.jsx";
 import BrainChip from "./components/BrainChip.jsx";
 import ViewArea from "./components/ViewArea.jsx";
+import ToolBoxModeToggle from "./components/ToolBoxModeToggle.jsx";
+import { readStoredMode, resolveMode, supports3D } from "./toolboxView.js";
 import RunningApps from "./components/RunningApps.jsx";
 import ConversationControls from "./components/ConversationControls.jsx";
 import HistoryPanel from "./components/HistoryPanel.jsx";
@@ -109,6 +111,9 @@ export default function App() {
   const sawRecordingRef = useRef(false);  // that listen actually started recording
   const relistensRef = useRef(0);         // re-listens used for the current card
   const [toolboxStatus, setToolboxStatus] = useState(null);
+  // Toolbox map mode: the remembered choice, and what is displayed after fallback.
+  const [toolboxRequested, setToolboxRequested] = useState(() => readStoredMode());
+  const toolboxMode = resolveMode(toolboxRequested, supports3D());
 
   // P2: mute (wake-word listening on/off), New Chat, and history.
   const [micOn, setMicOn] = useState(true);
@@ -546,6 +551,9 @@ export default function App() {
               <option key={v.id} value={v.id}>{v.label}</option>
             ))}
           </select>
+          {activeView === "toolbox" && (
+            <ToolBoxModeToggle mode={toolboxRequested} onChange={setToolboxRequested} />
+          )}
           <RunningApps />
           {toolboxStatus && toolboxStatus.state !== "disabled" && (
             <span
@@ -588,7 +596,17 @@ export default function App() {
           onDrag={handleOrbDrag}
           onMinimizedDrag={handleMinimizedDrag}
         />
-        {activeView !== "chat" && <ViewArea view={activeView} />}
+        {activeView !== "chat" && (
+          <ViewArea
+            view={activeView}
+            toolbox={{
+              mode: toolboxMode.mode,
+              fallbackReason: toolboxMode.fallbackReason,
+              serverRows: toolboxStatus?.server_rows ?? [],
+              hubState: toolboxStatus?.state === "connected" ? "running" : "offline",
+            }}
+          />
+        )}
         {!minimized && <BrainChip />}
         {!minimized && historyOpen && (
           <HistoryPanel

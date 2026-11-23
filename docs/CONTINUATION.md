@@ -4,6 +4,33 @@ Read this first at the start of every Rigel session. Newest entry on top.
 
 ---
 
+## Toolbox view M2: built, NOT verified, live data blocked (2026-11-23 03:40)
+
+**Branch:** `feature/rigel-toolbox-view` (from `ec50782`, the View Screens P2 branch; NOT from the speaker-verification HEAD) · **Not committed.** Commit when Tony asks.
+
+- Mockup v2 approved by Tony: `docs/mockups/toolbox-view-m2-v2.html` (uncommitted). Earlier v1: `docs/mockups/toolbox-view-m2-v1.html`.
+- Decisions (Tony): ToolBox at the centre of the map, Rigel and other agents at the edge; 2D | 3D toggle in the header; 2D opens first and the choice is remembered (localStorage `rigel.toolboxView`); 3D falls back to 2D with "3D unavailable here, showing 2D." when CSS 3D transforms are missing; 3D style is orbit with drag to rotate; read-only; current state only.
+- Defaults I took, not yet confirmed by Tony: a down server stays a red node with its error line; no pulse on tool use in v1.
+- BUILT (uncommitted): `desktop/src/toolboxView.js` (stateTone, supports3D, readStoredMode, storeMode, resolveMode); `desktop/src/components/ToolBoxMap.jsx`; `desktop/src/components/ToolBoxModeToggle.jsx`; `ViewArea.jsx` Toolbox branch now renders the map; `App.jsx` holds the mode and shows the toggle when the Toolbox view is active; `styles.css` `.tb-*` rules; `src/__tests__/ToolBoxMap.test.jsx` (state tones, mode fallback, remembered mode, map labels, error line, empty state, toggle).
+- VERIFIED ON MAC (2026-11-23 03:21): `npm test` 19 of 19 pass (3 files); `npx vite build` passes. One test first failed on Node's built-in localStorage; fixed with an in-memory stub in `ToolBoxMap.test.jsx`.
+- NOT YET VERIFIED LIVE: the map in the running app (2D/3D toggle, fallback) and the sidecar tests on the Mac (`./.venv/bin/python -m pytest -q sidecar/tests`).
+- (Earlier note, superseded for tests:) the sandbox is Linux and `node_modules` has macOS binaries, so Vitest and `vite build` could not run here. Nothing in the desktop code has been run. Run `npm test` and `npx vite build` in `desktop/` on the Mac.
+- 2026-11-23 03:30 DATA IN: Tony's ToolBox `/status` sample: 14 servers; each has `tools`, `state`, `last_error`. Every server was `cold` (ToolBox's idle label, starts on demand) with no errors. Tony's decision: show `cold` as its own neutral grey label, not red; red only for an error.
+- BUILT: `sidecar/toolbox_client.py` `server_rows()` passes ToolBox's labels through and maps `last_error` to `error`; `status()` returns `server_rows`. Tests: `sidecar/tests/test_toolbox_status.py` (4). Map shows any server's error line; `cold` test added to `ToolBoxMap.test.jsx`.
+- Sidecar tests on Mac before this change: 81 passed. Desktop: 19 passed.
+- 2026-11-23 03:40 Tony's layout choice: two rings by state (running inner, cold and others outer). Mockup v3 saved and verified on disk: `docs/mockups/toolbox-view-m2-v3.html` (real 14 server names and counts, 132 tools; the running states and the one error are illustrative). v3 needs Tony's approval before the map code changes.
+- 2026-11-23 03:45 v3 approved by Tony ("I like!"). Built via /cook by hand (the cook scripts need the Mac environment): spec `.cheese/specs/m2-toolbox-view.md` (approved); handoff `.cheese/cook/m2-toolbox-view.md` (next: age). Code: `ToolBoxMap.jsx` now places running/starting/stopping on the inner ring, others outer; side panel summary; hover title per server. Tests: ring and summary tests added.
+- VERIFIED ON MAC (2026-11-23 03:33): `npm test` 25 of 25 pass (3 files); `npx vite build` passes; sidecar `pytest sidecar/tests` 85 passed.
+- NOT YET: a browser check of the two-ring map with the 14 live servers (`npm run dev`, `http://localhost:1425/`, Toolbox view, 2D and 3D). Not committed.
+- Tests on Mac after the adapter: sidecar and desktop both passed (Tony, 03:27).
+- (layout issue now decided, see above) OPEN LAYOUT ISSUE: 14 servers on the one 2D ring will overlap their labels. The mockup had 7. Needs a layout decision (two rings, a list beside the map, or a scroll) before the 2D view is final.
+- (superseded) BLOCKED: live server data. `App.jsx` reads `toolboxStatus.server_rows`, which the sidecar does not send yet. `sidecar/toolbox_client.py` `status()` only keeps the server count and total tools. Needed: a sample of ToolBox `/status` (`curl -s http://127.0.0.1:8795/status` on the Mac, redacted), then write the adapter that turns it into `server_rows: [{name, state, tools, error?}]`. The ToolBox source folder (`~/Codehome/ToolBox`) is not readable from this session (access denied by the auto-mode classifier).
+- Git: this session needed delete permission on `/Users/tonyseneadza/Codehome/rigel` (granted by Tony, 2026-11-23 03:35). Stale lock files from earlier failed commands remain under `.git/` (`stale-*`); they can be deleted now. A stash from the speaker-verification branch was dropped after its checkpoint was reapplied here.
+- Not done: vault copy of the mockups and a decision-log entry (`~/tonys-neural-vault/Rigel` is not reachable from this session).
+- Next steps: (1) Tony runs `npm test` and `npx vite build` on the Mac; (2) Tony supplies the `/status` sample; (3) write the `server_rows` adapter and its sidecar test; (4) confirm the two defaults above; (5) verify on the Mac with ToolBox running and one server stopped, toggle 2D/3D, and force the 3D fallback; (6) commit when Tony asks.
+
+---
+
 ## ToolBox follow-up fixes + PR (2026-11-22)
 
 **Branch:** `feature/rigel-view-screens-p2` (pushed) · **Draft PR:** https://github.com/tseneadza/rigel/pull/2 (persona + View Screens P1/P2 + these fixes; review before merging)
