@@ -12,6 +12,37 @@ use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextPar
 const MODEL_URL: &str = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin";
 const MODEL_FILE: &str = "ggml-base.en.bin";
 
+/// Whisper's initial prompt: spells these names the way we want them in the
+/// transcript. Names here are the ones the model gets wrong most often.
+const VOCAB_PROMPT: &str = "Rigel, ToolBox, Codehome, Obsidian, scratch.txt, Tony Seneadza.";
+
+/// Known mishearings of our own terms, corrected after transcription. Exact
+/// whole-word matches only, so ordinary words are never touched.
+const TERM_FIXES: &[(&str, &str)] = &[
+    ("rigio", "Rigel"),
+    ("rigero", "Rigel"),
+    ("rigil", "Rigel"),
+    ("rogeridol", "Rigel"),
+    ("scratch.tit", "scratch.txt"),
+];
+
+/// Replaces known mishearings word by word. Trailing punctuation is kept.
+pub fn fix_terms(text: &str) -> String {
+    text.split(' ')
+        .map(|word| {
+            let core: String = word.chars().take_while(|c| c.is_alphanumeric() || *c == '.').collect();
+            let core = core.trim_end_matches('.');
+            let trail = &word[core.len()..];
+            let key = core.to_lowercase();
+            match TERM_FIXES.iter().find(|(from, _)| *from == key) {
+                Some((_, to)) => format!("{to}{trail}"),
+                None => word.to_string(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn models_dir() -> Result<PathBuf, String> {
     let home = std::env::var_os("HOME")
         .map(PathBuf::from)
@@ -149,6 +180,7 @@ pub fn transcribe(samples: &[f32], sample_rate: u32, channels: u16) -> Result<St
     params.set_no_context(true);
     params.set_suppress_blank(true);
     params.set_suppress_nst(true);
+    params.set_initial_prompt(VOCAB_PROMPT);
 
     state.full(params, &audio).map_err(|e| e.to_string())?;
 
@@ -158,7 +190,7 @@ pub fn transcribe(samples: &[f32], sample_rate: u32, channels: u16) -> Result<St
         max_no_speech = max_no_speech.max(segment.no_speech_probability());
         text.push_str(&segment.to_string());
     }
-    let text = text.trim().to_string();
+    let text = fix_terms(text.trim());
     log::info!(
         "stt: {:.2}s audio -> {:?} (no_speech_prob={:.2})",
         audio.len() as f32 / 16000.0,
@@ -201,7 +233,22 @@ fn looks_like_speech(text: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::looks_like_speech;
+    use super::{fix_terms, looks_like_speech};
+
+    #[test]
+    fn fixes_known_mishearings_of_our_terms() {
+        assert_eq!(fix_terms("Use the toolbox to list the files in my Rigio folder."),
+                   "Use the toolbox to list the files in my Rigel folder.");
+        assert_eq!(fix_terms("Delete the scratch.tit file."), "Delete the scratch.txt file.");
+        assert_eq!(fix_terms("my rogeridol folder"), "my Rigel folder");
+    }
+
+    #[test]
+    fn leaves_ordinary_words_alone() {
+        for s in ["rigid body", "rigging the boat", "Open Safari", "scratch the surface"] {
+            assert_eq!(fix_terms(s), s);
+        }
+    }
 
     #[test]
     fn rejects_non_speech_tags() {
