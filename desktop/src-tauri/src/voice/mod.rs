@@ -3,7 +3,11 @@
 
 pub mod capture;
 pub mod enroll;
+pub mod embedding;
+pub mod fbank;
 pub mod listener;
+pub mod speaker;
+pub mod model;
 pub mod stt;
 pub mod tts;
 

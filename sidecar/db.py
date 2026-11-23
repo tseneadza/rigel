@@ -104,6 +104,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
     )
     conn.commit()
     _migrate_conversations(conn)
+    _migrate_voice_profiles(conn)
 
 
 def _migrate_conversations(conn: sqlite3.Connection) -> None:
@@ -156,6 +157,54 @@ def _backup_before_migration(conn: sqlite3.Connection) -> None:
     if not backup.exists():
         conn.execute("PRAGMA wal_checkpoint(FULL)")  # fold WAL into the main file first
         backup.write_bytes(Path(file_path).read_bytes())
+
+
+def _migrate_voice_profiles(conn: sqlite3.Connection) -> None:
+    """Add the voice_profiles table (idempotent). New table only: no existing
+    rows are touched, so no backup is needed. One row per enrolled model."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS voice_profiles (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at   TEXT    NOT NULL,
+            model        TEXT    NOT NULL,
+            embeddings   TEXT    NOT NULL,   -- JSON: list of enrollment vectors
+            UNIQUE (model)
+        );
+        """
+    )
+    conn.commit()
+
+
+def save_voice_profile(model: str, embeddings: list[list[float]]) -> None:
+    """Store the enrollment vectors for one model, replacing any earlier profile."""
+    if not embeddings or not all(embeddings):
+        raise ValueError("a voice profile needs at least one non-empty embedding")
+    conn = connect()
+    conn.execute(
+        "INSERT INTO voice_profiles (created_at, model, embeddings) VALUES (?, ?, ?) "
+        "ON CONFLICT(model) DO UPDATE SET created_at = excluded.created_at, "
+        "embeddings = excluded.embeddings",
+        (_now(), model, json.dumps(embeddings)),
+    )
+    conn.commit()
+
+
+def get_voice_profile(model: str) -> dict | None:
+    """The stored profile for one model, or None if the user hasn't enrolled."""
+    row = connect().execute(
+        "SELECT created_at, model, embeddings FROM voice_profiles WHERE model = ?", (model,)
+    ).fetchone()
+    if row is None:
+        return None
+    return {"created_at": row[0], "model": row[1], "embeddings": json.loads(row[2])}
+
+
+def delete_voice_profile(model: str) -> bool:
+    conn = connect()
+    cur = conn.execute("DELETE FROM voice_profiles WHERE model = ?", (model,))
+    conn.commit()
+    return cur.rowcount > 0
 
 
 # ── conversations ──────────────────────────────────────────────────────────

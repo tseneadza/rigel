@@ -4,6 +4,44 @@ Read this first at the start of every Rigel session. Newest entry on top.
 
 ---
 
+## Speaker verification: embedding pipeline verified (2026-11-23 03:00)
+
+- VERIFIED ON MAC: `voice/fbank.rs` matches the Wespeaker reference frontend (max abs diff 0.00013 on Tony's 4.5 s sample). Test: `cargo test voice::fbank::reference -- --ignored`.
+- VERIFIED ON MAC: `voice/embedding.rs` (`SpeakerEncoder`) loads the pinned model (checksum checked first) and returns 192 numbers matching `tools/speaker_ref_check.py` (max abs diff 0.000007). Test: `cargo test voice::embedding -- --ignored`.
+- Model: Wespeaker `voxceleb_ECAPA512_LM.onnx`, licence CC-BY-4.0. Attribution kept in `voice/model.rs`. Downloaded to `~/Library/Application Support/com.tonyseneadza.rigel/models/`.
+- Not done: no matching logic yet wired to the listener; no enrollment flow; no threshold tuning (`DEFAULT_THRESHOLD = 0.5` still placeholder).
+- Open: sidecar-to-listener profile transport. Threshold tuning needs enrolled clips plus TV-audio clips.
+- Next steps: (1) decide profile transport; (2) enrollment: record 3 clips with the v12 flow, compute embeddings, store in `voice_profiles`; (3) tune threshold on your own clips and TV clips; (4) gate the listener.
+
+---
+
+## Speaker verification: groundwork committed, ort added (2026-11-23 02:00)
+
+- COMMITTED `a832e9b` on `feature/speaker-verification`: voice_profiles table + helpers + tests, `speaker.rs` + six tests, mockups v11/v12, spec draft, this doc. Not pushed by the sandbox: run `git push -u origin feature/speaker-verification` on the Mac after clearing `.git/HEAD.lock` (left by an interrupted commit).
+- Tony's `cargo test` (Mac): 19 passed, 0 failed, 4 ignored (live audio/TTS). The 4 dead-code warnings on `speaker.rs` are expected until the listener calls it.
+- ADDED, UNCOMMITTED: `ort = "=2.0.0-rc.13"` in `desktop/src-tauri/Cargo.toml` (newest published line; 2.0 is still a release candidate, so the exact pin is intentional). Tony ran `cargo build` and `cargo test` on the Mac: all passed (2026-11-23 02:04).
+- NOT DONE, blocked: model loader. Needs the ECAPA-TDNN ONNX file and its SHA-256, which the sandbox cannot download or verify. Do not write a checksum from memory.
+- OPEN: sidecar-to-listener profile transport design (confirm before wiring).
+- Next steps: (1) Tony supplies or approves the model source and checksum; (2) Tony builds on Mac and reports; (3) write loader + tests; (4) wire `is_enrolled_voice` into the listener only after threshold tuning plan is agreed.
+
+---
+
+## Speaker verification: build started (2026-11-23 01:50, branch `feature/speaker-verification` off main)
+
+- Approved by Tony: mockups v11 (settings) and v12 (enrollment) in `docs/mockups/`, decisions in `docs/specs/speaker-verification-and-settings-DRAFT.md`. Model download OK (ECAPA-TDNN ONNX, about 83 MB, first run).
+- DONE (uncommitted): `sidecar/db.py` `voice_profiles` table (new table only, no backup needed) with `save_voice_profile`, `get_voice_profile`, `delete_voice_profile`. Tests `sidecar/tests/test_db_voice_profile.py`: 8 pass, plus the 6 conversation tests (14 total).
+- DONE (uncommitted): `desktop/src-tauri/src/voice/speaker.rs`: cosine, best score over enrolled vectors, `is_enrolled_voice` (fails closed with no profile). `DEFAULT_THRESHOLD = 0.5` is a PLACEHOLDER until tuned. Six unit tests. Registered in `voice/mod.rs`. NOT compiled here: run `cargo test` on the Mac.
+- Note: `stt.rs` on this branch was restored to `main` (the vocabulary change lives on `feature/stt-vocabulary`, commit 0ec87f9).
+- Chose to proceed with the plan as written (sidecar sends the profile to the listener). Not yet built.
+- NEXT (needs the Mac for Rust builds): (1) model loader in `desktop/src-tauri` via ONNX Runtime with checksum check; (2) embedding + match against the stored profile; (3) gate the listener and approvals on the match (drop non-matching transcripts before wake word or approval); (4) enrollment UI (v12) and settings UI (v11); (5) measure false accept/reject on Tony's recorded clips, including TV, then set the default threshold.
+- Open design question for step 1: the profile lives in the sidecar DB, but matching runs in the Rust listener. Plan: sidecar serves the profile to the listener at start-up and after enrollment. Confirm before building.
+
+## Speech-to-text: vocabulary hint + term fixes (2026-11-23, NOT committed, NOT on a branch yet)
+
+- `desktop/src-tauri/src/voice/stt.rs`: Whisper initial prompt (`VOCAB_PROMPT`: Rigel, ToolBox, Codehome, Obsidian, scratch.txt, Tony Seneadza) and `fix_terms()`: exact whole-word fixes for observed mishearings ("Rigio", "Rigero", "rogeridol", "scratch.tit"). Unit tests added to the existing `tests` module.
+- Not compiled or run. Run `cargo test` in `desktop/src-tauri` on the Mac, then test with the live mic.
+- Git on this machine is blocked by stale lock files (`.git/index.lock`, `.git/HEAD.lock`). A leftover `.git/stale-index-lock-0600` was moved aside by hand. On the Mac, with no git running, delete the lock files, then create `feature/stt-vocabulary` from `origin/main` and commit this change.
+
 ## Voice approval fix: grunts must never approve (2026-11-23, branch `fix/voice-approval-noise`)
 
 **Branch:** `fix/voice-approval-noise` (from `ec50782`) · **Not committed yet**. Commit when Tony asks.
