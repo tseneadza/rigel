@@ -3,6 +3,7 @@
 
 pub mod capture;
 pub mod enroll;
+pub mod fbank;
 pub mod listener;
 pub mod speaker;
 pub mod model;
