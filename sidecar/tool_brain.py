@@ -24,6 +24,7 @@ import json
 import logging
 import re
 import time
+from pathlib import Path
 import urllib.error
 from dataclasses import asdict, dataclass
 
@@ -46,9 +47,62 @@ TOOLBOX_SYSTEM = (
     "declined or not approved, say plainly that it wasn't done. If a tool errors, say what failed. "
     "Never state a fact or an outcome you didn't get from a tool result in this conversation: if you "
     "couldn't find or run the right tool, say so instead of guessing. "
+    "Files: never invent or guess a path. Before changing, moving or deleting a file, confirm where it "
+    "is: search for it (e.g. osa-system.fs.search with a root folder and the file name) or list the "
+    "folder. If nothing matches, or more than one file could be the one meant, ask the user which "
+    "one instead of picking. If a tool refuses a path as outside its allowed folders, say that path "
+    "isn't one it's allowed to touch; never suggest widening allowed folders or other safety settings. "
     "When you're done, call respond. Replies may be spoken aloud: keep them short and natural, no "
     "markdown, no raw JSON."
 )
+
+_HOME = Path.home()
+_REPO = Path(__file__).resolve().parents[1]      # Rigel's own code: ~/Codehome/rigel
+_SANDBOX = _HOME / "rigel-files"                 # executor.py's sandbox for Rigel's own file actions
+
+
+def _tilde(p: Path) -> str:
+    try:
+        return "~/" + str(p.relative_to(_HOME))
+    except ValueError:
+        return str(p)
+
+
+def places_note() -> str:
+    """Where things are on this Mac. Without it every brain, Claude Sonnet 5
+    included, mapped "my rigel folder" to ~/rigel-files (Rigel's sandbox,
+    seen in history) and tried to delete a file that wasn't there (live,
+    2026-11-22)."""
+    return (
+        f" Places on this Mac: the user's home folder is {_HOME}. 'Rigel', 'the rigel folder' or "
+        f"'my rigel folder' means Rigel's own project folder, {_tilde(_REPO)} ({_REPO}). "
+        f"{_tilde(_SANDBOX)} is only Rigel's scratch area for its own create_file/delete_file actions; "
+        "never assume the user's files are there. Use absolute paths in tool arguments."
+    )
+
+
+# Tool names that change or remove an existing file: for these, a path
+# argument must point at something that exists, or Rigel doesn't send it.
+_CHANGES_EXISTING = re.compile(r"(?:^|[._])(?:delete|remove|trash|unlink|move|rename)(?:$|[._])", re.I)
+_PATH_KEYS = ("path", "file_path", "filepath", "source", "src")
+
+
+def _missing_target(tool: str, arguments: dict) -> str | None:
+    """The path argument of a delete/move/rename that doesn't exist on this
+    Mac, or None. Deterministic, model-independent: the brain must find the
+    file before acting on it (live, 2026-11-22: it guessed ~/rigel-files/…).
+    Relative paths are left to the server to resolve."""
+    if not _CHANGES_EXISTING.search(tool.split(".", 1)[-1]):
+        return None
+    for key in _PATH_KEYS:
+        value = arguments.get(key)
+        if not isinstance(value, str) or not value.strip():
+            continue
+        p = Path(value).expanduser()
+        if p.is_absolute() and not p.exists():
+            return value
+    return None
+
 
 NEED_TOOL = {
     "name": "toolbox_need",
@@ -149,6 +203,17 @@ class _Runner:
                     return (f"{tool!r} is not a tool name you got from toolbox_need, so it was not run. "
                             f"I looked it up for you; these are the real matches. Call toolbox_call again "
                             f"with one of these exact `tool` names and arguments matching its input_schema:\n{text}"), True
+            missing = _missing_target(tool, arguments)
+            if missing is not None:
+                msg = (f"Not run: there is no file at {missing}. Don't guess paths. Find the file first "
+                       f"(search for it, e.g. osa-system.fs.search, or list the folder), or ask the user "
+                       f"where it is, then call {tool} again with its real absolute path.")
+                self.steps.append(ToolStep(
+                    kind="call", tool=tool, arguments=arguments, status="error",
+                    ms=round((time.monotonic() - started) * 1000),
+                    detail=f"not sent: no file at {missing}",
+                ))
+                return msg, True
             text, is_error, opened = self.client.call(self.base_url, tool, arguments)
             approval = None
             status = "error" if is_error else "ok"
@@ -261,7 +326,7 @@ def _claude_loop(text: str, model: str, runner: _Runner, max_steps: int,
         raise llm_providers.LLMError(f"unknown Claude model: {model!r}")
     client = llm_providers.anthropic_client()
     messages: list[dict] = llm_providers.with_history(history, text)
-    system = llm_providers.SYSTEM_PROMPT + TOOLBOX_SYSTEM
+    system = llm_providers.SYSTEM_PROMPT + TOOLBOX_SYSTEM + places_note()
     used = 0
     for _ in range(max_steps + 2):
         tools = [NEED_TOOL, CALL_TOOL, RESPOND_TOOL] if used < max_steps else [RESPOND_TOOL]
@@ -316,7 +381,7 @@ def ollama_supports_tools(model: str, host: str) -> bool:
 
 def _ollama_loop(text: str, model: str, host: str, runner: _Runner, max_steps: int,
                  history: list[dict] | None = None) -> tuple[str, list[dict]]:
-    system = llm_providers.SYSTEM_PROMPT + TOOLBOX_SYSTEM + (
+    system = llm_providers.SYSTEM_PROMPT + TOOLBOX_SYSTEM + places_note() + (
         " To answer, call respond with reply and commands (args_json is a JSON-encoded string)."
     )
     messages: list[dict] = [{"role": "system", "content": system},
@@ -395,6 +460,12 @@ def respond(text: str, llm_config: dict, toolbox_config: dict,
 
 
 _LEAK = re.compile(r"(?:\b(?:respond|toolbox_call|toolbox_need)\s*\(|\{\s*\"(?:name|tool|reply|commands)\"\s*:)")
+_CLAIMED_OUTCOME = re.compile(
+    r"\b(?:wasn't|was not|isn't|is not|weren't)\s+(?:approved|declined|deleted|removed|run|done)\b|"
+    r"\b(?:was|has been|have been|got)\s+(?:approved|declined|deleted|removed)\b|\bnot approved\b", re.I)
+_LOOSEN_SAFETY = re.compile(
+    r"\b(?:adjust|widen|expand|change|add to|update|loosen|relax|modify)\b[^.!?]*\ballowed\s+"
+    r"(?:filesystem\s+)?(?:roots?|folders?|directories|paths?)", re.I)
 _FALSE_WAIT = re.compile(r"waiting on your approval|check the console", re.I)
 _CLAIMED_ACTION = re.compile(
     r"\bI(?:'ve| have)? (?:called|run|ran|executed|deleted|sent|created|moved|checked)\b|\b[\w-]+\.[\w.]+ with\b", re.I)
@@ -408,10 +479,19 @@ def _sanitize_reply(reply: str, commands: list[dict], steps: list[ToolStep]) -> 
     exist, answer with a factual summary of the steps instead."""
     lines = [ln for ln in (reply or "").splitlines() if not _LEAK.search(ln)]
     cleaned = "\n".join(lines).strip()
+    # Never advise loosening a safety boundary to work around a refusal
+    # (live, 2026-11-22: every brain said "adjust the allowed roots").
+    cleaned = " ".join(
+        sent for sent in re.split(r"(?<=[.!?])\s+", cleaned) if not _LOOSEN_SAFETY.search(sent)
+    ).strip()
     calls = [s for s in steps if s.kind == "call"]
-    if not calls and not commands and _CLAIMED_ACTION.search(cleaned):
-        # Claims something ran when nothing did (live, llama3.1:8b).
-        return "I found a tool for that but didn't actually run it, so nothing has changed. Ask me again?"
+    if not calls and not commands and (_CLAIMED_ACTION.search(cleaned) or _CLAIMED_OUTCOME.search(cleaned)):
+        # Claims something ran (live, llama3.1:8b), or repeats an earlier
+        # turn's approval outcome from history (live, 2026-11-22, an Ollama
+        # model replied "wasn't approved" without calling anything).
+        if steps:
+            return "I found a tool for that but didn't actually run it, so nothing has changed. Ask me again?"
+        return "I didn't run anything for that, so nothing has changed. Ask me again?"
     if cleaned and not (not commands and _FALSE_WAIT.search(cleaned) and calls):
         return cleaned
     if not calls:
