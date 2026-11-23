@@ -46,6 +46,9 @@ import {
 // how often to refresh the ToolBox badge otherwise.
 const APPROVAL_POLL_MS = 600;
 const TOOLBOX_STATUS_POLL_MS = 20000;
+// How many times to listen again for a spoken answer after a listen ends
+// with nothing usable (a cough, a click, silence), before "click to answer".
+const MAX_RELISTENS = 3;
 
 // Fallback only — used before orbConfig has loaded from the sidecar; the
 // real minimized size comes from orbConfig.min_diameter_px (Settings → Orb).
@@ -93,7 +96,18 @@ export default function App() {
   const [toolboxApprovals, setToolboxApprovals] = useState([]);
   const approvalsRef = useRef([]);
   const announcedApprovalsRef = useRef(new Set());
-  const [approvalListening, setApprovalListening] = useState(false);
+  // Spoken-answer status shown on the approval card:
+  //   null        not listening (voice off, or answered)
+  //   "waiting"   listening requested; Rigel is still speaking the question
+  //   "listening" the mic is actually recording an answer
+  //   "click"     gave up listening after a few empty tries; click to answer
+  // Live bugs (2026-11-22): the bars showed while Rigel was still talking,
+  // and a stray sound used up the single listen while the card still said
+  // "listening for your answer".
+  const [approvalVoice, setApprovalVoice] = useState(null);
+  const listenArmedRef = useRef(false);   // a listen-once is pending or recording for the current card
+  const sawRecordingRef = useRef(false);  // that listen actually started recording
+  const relistensRef = useRef(0);         // re-listens used for the current card
   const [toolboxStatus, setToolboxStatus] = useState(null);
 
   // P2: mute (wake-word listening on/off), New Chat, and history.
@@ -173,6 +187,7 @@ export default function App() {
   useEffect(
     () =>
       subscribeInEffect(onVoiceState, (payload) => {
+        trackApprovalListening(payload.state);
         if (payload.state === "idle" && isBusy()) return;
         setOrbState(payload.state);
       }),
@@ -188,11 +203,13 @@ export default function App() {
         if (!looksLikeSpeech(text)) {
           console.warn("Dropped non-speech transcript:", text);
           setOrbState("idle");
+          if (listen_once) listenAgainOrGiveUp();
           return;
         }
         // A ToolBox server is waiting on an answer: this utterance is the
         // answer, not a new request (with or without the wake word).
         if (approvalsRef.current.length > 0) {
+          stopListeningForAnswer();
           await answerApprovalByVoice(approvalsRef.current[0], text);
           return;
         }
@@ -244,7 +261,7 @@ export default function App() {
       if (approvalsRef.current.length > 0) cancelListenOnce().catch(() => {});
       approvalsRef.current = [];
       setToolboxApprovals([]);
-      setApprovalListening(false);
+      stopListeningForAnswer();
       return;
     }
     let stopped = false;
@@ -256,7 +273,7 @@ export default function App() {
           approvalsRef.current = approvals;
           setToolboxApprovals(approvals);
           if (approvals.length === 0) {
-            setApprovalListening(false);
+            stopListeningForAnswer();
             // The card went away (answered elsewhere, or the server stopped
             // waiting): stop listening for an answer to it.
             if (hadApprovals) cancelListenOnce().catch(() => {});
@@ -283,20 +300,61 @@ export default function App() {
     if (!voiceConfigRef.current.enabled) return;
     try {
       await speak(sentence, voiceConfigRef.current.tts_voice);
-      await listenOnce();
-      setApprovalListening(true);
+      await armListen();
     } catch (err) {
       console.error("Couldn't ask for approval out loud:", err);
-      setApprovalListening(false);
+      stopListeningForAnswer("click");
+    }
+  }
+
+  // Request one listen (the native side starts recording only once Rigel
+  // has finished speaking). The bars wait for the real "recording" state.
+  async function armListen() {
+    sawRecordingRef.current = false;
+    listenArmedRef.current = true;
+    setApprovalVoice("waiting");
+    await listenOnce();
+  }
+
+  function stopListeningForAnswer(next = null) {
+    listenArmedRef.current = false;
+    sawRecordingRef.current = false;
+    setApprovalVoice(next);
+  }
+
+  // A listen ended with nothing usable while the card is still waiting:
+  // listen again, a few times, then say so instead of pretending to listen.
+  function listenAgainOrGiveUp() {
+    if (!listenArmedRef.current || approvalsRef.current.length === 0) return;
+    if (relistensRef.current >= MAX_RELISTENS) {
+      stopListeningForAnswer("click");
+      return;
+    }
+    relistensRef.current += 1;
+    armListen().catch(() => stopListeningForAnswer("click"));
+  }
+
+  // Follow the native voice state for the listen we asked for.
+  function trackApprovalListening(state) {
+    if (!listenArmedRef.current || approvalsRef.current.length === 0) return;
+    if (state === "recording") {
+      sawRecordingRef.current = true;
+      setApprovalVoice("listening");
+    } else if (state === "thinking" && sawRecordingRef.current) {
+      setApprovalVoice("waiting"); // transcribing what it heard
+    } else if (state === "idle" && sawRecordingRef.current) {
+      // Ended with nothing usable: gave up waiting, empty transcript.
+      sawRecordingRef.current = false;
+      listenAgainOrGiveUp();
     }
   }
 
   function announceApproval(a) {
+    relistensRef.current = 0;
     askOutLoud(a.spoken);
   }
 
   async function answerApprovalByVoice(approval, text) {
-    setApprovalListening(false);
     setOrbState("thinking");
     try {
       const r = await interpretToolboxApproval(approval.id, text, "voice");
@@ -316,7 +374,7 @@ export default function App() {
     const left = approvalsRef.current.filter((a) => a.id !== updated.id);
     approvalsRef.current = left;
     setToolboxApprovals(left);
-    setApprovalListening(false);
+    stopListeningForAnswer();
     // Answered by click: stop the spoken-answer recording, or it keeps
     // running and picks up Rigel's own reply (live bug, 2026-11-22).
     cancelListenOnce().catch(() => {});
@@ -558,7 +616,7 @@ export default function App() {
           pendingCommands={pendingCommands}
           onCommandResolved={handleCommandResolved}
           toolboxApprovals={toolboxApprovals}
-          approvalListening={approvalListening}
+          approvalVoice={approvalVoice}
           onApprovalAnswered={handleApprovalAnswered}
         />
       </footer>
