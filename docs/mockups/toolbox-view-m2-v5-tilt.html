@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rigel · Toolbox view M2 · v5 (tilt control mockup)</title>
+<style>
+  :root { --bg:#0b0d12; --panel:#12151c; --line:#262b36; --text:#e7eaf0; --muted:#8b93a5; --bad:#f87171; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.4 -apple-system,system-ui,sans-serif; }
+  header { display:flex; align-items:center; justify-content:space-between; padding:12px 18px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:15px; margin:0; font-weight:600; }
+  .mode { display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .mode button { background:none; color:var(--muted); border:0; padding:6px 14px; cursor:pointer; font:inherit; }
+  .mode button[aria-pressed="true"] { background:#1f2636; color:var(--text); }
+  main { display:grid; grid-template-columns: 1fr 260px; height: calc(100vh - 53px); }
+  #stage { position:relative; overflow:hidden; cursor:grab; touch-action:none; }
+  #stage:active { cursor:grabbing; }
+  #stage canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  .label { position:absolute; transform:translate(-50%, -135%); font-size:12px; white-space:nowrap; pointer-events:none; text-shadow:0 1px 2px #000; }
+  .label small { display:block; color:var(--muted); font-size:11px; }
+  .label.bad small { color:var(--bad); }
+  .hint { position:absolute; left:14px; bottom:12px; color:var(--muted); font-size:12px; }
+  .tilt { position:absolute; right:14px; bottom:12px; color:var(--text); font-size:12px; background:#12151c; border:1px solid var(--line); border-radius:8px; padding:4px 10px; }
+  aside { background:var(--panel); border-left:1px solid var(--line); padding:16px; overflow:auto; }
+  aside h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:18px 0 8px; font-weight:600; }
+  aside h2:first-child { margin-top:0; }
+  .row { display:flex; justify-content:space-between; padding:4px 0; }
+  .err { color:var(--bad); font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Toolbox</h1>
+  <div class="mode" role="group" aria-label="View mode">
+    <button id="m2" aria-pressed="false">2D</button>
+    <button id="m3" aria-pressed="true">3D</button>
+  </div>
+</header>
+<main>
+  <section id="stage">
+    <div id="labels"></div>
+    <div class="hint">Drag left or right to spin. Drag up or down to tilt. Scroll to zoom.</div>
+    <div class="tilt" id="tilt">Tilt 27°</div>
+  </section>
+  <aside>
+    <h2>Summary</h2>
+    <div class="row"><span>Running</span><span id="c-run">0</span></div>
+    <div class="row"><span>Starting / stopping</span><span id="c-ss">0</span></div>
+    <div class="row"><span>Not running</span><span id="c-nr">0</span></div>
+    <div class="row"><span>Tools available</span><span id="c-tools">0</span></div>
+    <h2>Errors</h2>
+    <div id="errs"></div>
+  </aside>
+</main>
+
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.170.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from "three";
+
+// Illustrative sample, same as v4.
+const SERVERS = [
+  { name:"osa-system", state:"running", tools:21, error:null },
+  { name:"gmail", state:"running", tools:14, error:null },
+  { name:"agentic-dev", state:"starting", tools:9, error:null },
+  { name:"image-tools", state:"running", tools:18, error:"Timed out on last call" },
+  { name:"excalidraw-architect-mcp", state:"cold", tools:12, error:null },
+  { name:"claude-code-usage", state:"cold", tools:7, error:null },
+  { name:"ai-image-detector", state:"not running", tools:6, error:"Process exited (code 1)" },
+  { name:"git", state:"cold", tools:10, error:null },
+];
+const INNER = new Set(["running","starting","stopping"]);
+const TONE = { running:0x4ade80, starting:0xfbbf24, stopping:0xfbbf24, "not running":0xf87171, cold:0x64748b };
+
+const c = (f) => SERVERS.filter(f).length;
+document.getElementById("c-run").textContent = c(s => s.state === "running");
+document.getElementById("c-ss").textContent  = c(s => s.state === "starting" || s.state === "stopping");
+document.getElementById("c-nr").textContent  = c(s => s.state === "not running");
+document.getElementById("c-tools").textContent = SERVERS.reduce((a,s)=>a+s.tools,0);
+document.getElementById("errs").innerHTML = SERVERS.filter(s=>s.error)
+  .map(s => `<div class="err">${s.name}: ${s.error}</div>`).join("");
+
+// Tilt is the camera's elevation above the orbit plane.
+// Flat = looking straight down (about 85 degrees). Edge-on = almost level (about 5 degrees).
+const DEG = Math.PI / 180;
+const TILT_MAX = 85 * DEG, TILT_MIN = 5 * DEG;
+const DRAG_TILT = 0.2 * DEG;      // degrees per pixel of vertical drag
+const DRAG_SPIN = 0.008;          // radians per pixel of horizontal drag
+const CAM_R = 9.5;                 // default distance (zoom 1.0×)
+const ZOOM_MIN = 4.5, ZOOM_MAX = 20; // 2.1× to 0.5×
+let dist = CAM_R;
+
+const stage = document.getElementById("stage");
+const labels = document.getElementById("labels");
+const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+stage.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+const orbit = new THREE.Group();   // spins around the vertical axis only
+scene.add(orbit);
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+const key = new THREE.DirectionalLight(0xffffff, 0.9); key.position.set(3,6,4); scene.add(key);
+
+const INNER_R = 2.2, OUTER_R = 3.6;
+orbit.add(new THREE.Mesh(new THREE.SphereGeometry(0.55, 40, 40),
+  new THREE.MeshStandardMaterial({ color:0x60a5fa, emissive:0x1e3a8a, roughness:0.35, metalness:0.1 })));
+for (const [r, op] of [[INNER_R,0.9],[OUTER_R,0.6]]) {
+  const m = new THREE.Mesh(new THREE.TorusGeometry(r, 0.012, 8, 180),
+    new THREE.MeshBasicMaterial({ color:0x334155, transparent:true, opacity:op }));
+  m.rotation.x = Math.PI/2; orbit.add(m);
+}
+
+const nodes = [];
+function place(list, r, offset){
+  list.forEach((s,i) => {
+    const a = offset + (i*2*Math.PI)/Math.max(list.length,1);
+    const pos = new THREE.Vector3(r*Math.cos(a), 0, r*Math.sin(a));
+    const col = TONE[s.state] ?? TONE.cold;
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.17, 28, 28),
+      new THREE.MeshStandardMaterial({ color:col, emissive:col, emissiveIntensity:0.25, roughness:0.4 }));
+    mesh.position.copy(pos); orbit.add(mesh);
+    orbit.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), pos]),
+      new THREE.LineBasicMaterial({ color:0x334155, transparent:true, opacity:0.8 })));
+    const el = document.createElement("div");
+    el.className = "label" + (s.error ? " bad" : "");
+    el.innerHTML = `${s.name}<small>${s.state}${s.error ? " · error" : ""}</small>`;
+    labels.appendChild(el);
+    nodes.push({ pos, el });
+  });
+}
+place(SERVERS.filter(s => INNER.has(s.state)), INNER_R, 0);
+place(SERVERS.filter(s => !INNER.has(s.state)), OUTER_R, Math.PI/Math.max(SERVERS.filter(s => !INNER.has(s.state)).length,1));
+const hubEl = document.createElement("div"); hubEl.className = "label";
+hubEl.innerHTML = "ToolBox<small>hub</small>"; labels.appendChild(hubEl);
+
+let elevation = 27 * DEG;   // default tilt, matches v4
+let spin = -0.6;
+let drag = null;
+function setElevation(e){ elevation = Math.min(TILT_MAX, Math.max(TILT_MIN, e)); }
+function updateCamera(){
+  const w = stage.clientWidth, h = stage.clientHeight;
+  camera.aspect = w/h; camera.updateProjectionMatrix();
+  camera.position.set(0, dist*Math.sin(elevation), dist*Math.cos(elevation));
+  camera.lookAt(0,0,0);
+  document.getElementById("tilt").textContent = `Tilt ${Math.round(elevation/DEG)}° · Zoom ${(CAM_R/dist).toFixed(1)}×`;
+}
+
+// Scroll to zoom. Range covers the whole map (far) to one server close up (near).
+stage.addEventListener("wheel", e => {
+  e.preventDefault();
+  dist = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, dist * Math.exp(e.deltaY * 0.0015)));
+}, { passive:false });
+
+// Drag left/right spins; drag up/down tilts. Up tilts toward flat, down toward edge-on.
+stage.addEventListener("pointerdown", e => { drag = { x:e.clientX, y:e.clientY }; });
+window.addEventListener("pointerup", () => { drag = null; });
+window.addEventListener("pointermove", e => {
+  if (!drag) return;
+  spin += (e.clientX - drag.x) * DRAG_SPIN;
+  setElevation(elevation - (e.clientY - drag.y) * DRAG_TILT);
+  drag = { x:e.clientX, y:e.clientY };
+});
+
+const v = new THREE.Vector3();
+function frame(){
+  if (!drag) spin += 0.002;
+  orbit.rotation.y = spin;
+  orbit.updateMatrixWorld(true);
+  updateCamera();
+  renderer.render(scene, camera);
+  const w = stage.clientWidth, h = stage.clientHeight;
+  const project = (p) => { v.copy(p).applyMatrix4(orbit.matrixWorld).project(camera); return [(v.x+1)/2*w, (1-v.y)/2*h]; };
+  for (const n of nodes) { const [x,y] = project(n.pos); n.el.style.left = x+"px"; n.el.style.top = y+"px"; }
+  const [hx,hy] = project(new THREE.Vector3()); hubEl.style.left = hx+"px"; hubEl.style.top = hy+"px";
+  requestAnimationFrame(frame);
+}
+function resize(){
+  renderer.setSize(stage.clientWidth, stage.clientHeight, false);
+  renderer.domElement.style.width = stage.clientWidth+"px";
+  renderer.domElement.style.height = stage.clientHeight+"px";
+}
+addEventListener("resize", resize);
+resize();
+frame();
+</script>
+</body>
+</html>

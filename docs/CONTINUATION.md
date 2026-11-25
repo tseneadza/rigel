@@ -4,6 +4,89 @@ Read this first at the start of every Rigel session. Newest entry on top.
 
 ---
 
+## Toolbox view M2: Rigel and other agent pinned in 2D (v8.3) BUILT and verified (2026-11-25, 03:05)
+
+**Branch:** `feature/rigel-toolbox-view` · **Not committed.**
+
+- Tony: wants the Rigel / other-agent boxes back; chose "pinned at the edge", 2D only (3D stays servers only: "That is the look I requested"). Mockup v8.3 approved ("Yes, build it"); same file `docs/mockups/toolbox-view-m2-v8-layout.html`.
+- BUILT: `ToolBoxMap.jsx` exports `PINNED_AGENTS` and `agentLinkEnd(index, zoom)`. The boxes sit at x 30, y 200 / 340 in the 1000×600 viewBox and don't spin, tilt or zoom. Their links are drawn first (under everything) and end at the hub edge for the current zoom; the boxes are drawn last (on top). `styles.css`: `.tb-agent` and `.tb-agent--other` have a solid dark fill (#0a1428) so they stay readable over the rings.
+- Tests: 4 new (boxes present at fixed positions, drawn after the servers, still after zoom with links on the hub edge, absent in 3D). `npx vitest run`: 5 files, 60 tests pass. `vite build` passes.
+- VERIFIED IN THE TAURI APP: `.verify-screenshots/v83-a-2d.png` (1.0×) and `v83-b-zoom.png` (2.1×). Rigel window confirmed frontmost by `osascript` before input; an earlier attempt hit the Claude app instead (window order), so check frontmost first.
+- The open question from the entry below (bring the agents back) is answered.
+
+## Toolbox view M2: 2D spin, tilt, zoom + layout fix BUILT and verified in the app (2026-11-25, 02:55)
+
+**Branch:** `feature/rigel-toolbox-view` · **Not committed.** Commit when Tony asks; push from the Mac.
+
+- Tony approved mockup v8.2 (`docs/mockups/toolbox-view-m2-v8-layout.html`): "Approve, build it".
+- BUILT (uncommitted):
+  - `desktop/src/toolboxFlat.js` (new): 2D geometry. `ringAngles`, `flatPoint` (spin, tilt squashes vertically, zoom scales around the hub), `clampFlatTilt` (20° to 90°, default 90° = straight down), `clampFlatZoom` / `flatWheelZoom` (0.5× to 2.1×, scroll down zooms out, as in 3D).
+  - `desktop/src/components/ToolBoxMap.jsx`: 2D is now a `FlatMap` that turns on its own (`IDLE_SPIN`, pauses while dragging), drag left/right spins, drag up/down tilts, the wheel zooms. Rings are ellipses; labels stay upright. Layout is a grid: map column (map, then `.tb-bar` with hint and readout) and the Servers column. `placeOnRings` removed (replaced by `ringAngles`). **The Rigel and "other agent" boxes are gone from 2D**, matching the approved v8.2 mockup (they would collide with the zoomed rings). Exports `HINT_2D`, `HINT_3D`, `flatReadout`.
+  - `desktop/src/components/ToolBoxScene.jsx`: no more floating hint/readout; it renders the map box plus the same `.tb-bar` (readout via ref). Takes a `hint` prop.
+  - `desktop/src/styles.css`: `.tb-map-wrap` grid, `.tb-map-col`, `.tb-map` (62vh, no text selection on drag), `.tb-bar*`; `.tb-side` no longer absolute; `.tb-scene` fills `.tb-map`; old `.tb-scene-readout` / `.tb-scene-hint` removed.
+  - Tests: `src/__tests__/toolboxFlat.test.js` (9, new); `ToolBoxMap.test.jsx` gets 6 new tests (bar under the map, Servers in its own column, idle spin, drag tilt, wheel zoom limits, 3D bar). The Rigel-box assertion was replaced. jsdom has no PointerEvent, so the drag test stubs one on MouseEvent.
+- VERIFIED: `npx vitest run`: 5 files, 56 tests pass (connected Linux VM). `npx vite build --outDir /tmp/<new dir>` passes (bundle 759 kB, the same three.js size warning).
+- VERIFIED IN THE TAURI APP (screenshots `.verify-screenshots/v82-a` to `v82-d`): 2D shows 14 servers with the Servers panel beside the map and the bar under it, no overlaps; idle spin moved the map within 4 s; a real mouse drag down and scroll gave "2D · Tilt 60° · Zoom 1.7×" with oval rings; 3D renders with its hint and readout in the bar, and agentic-dev, gmail and claude-code-usage are no longer covered.
+- NOT VERIFIED: the remembered 2D/3D choice after reload; the WebGL fallback in the app; other window sizes. Label crowding at 0.5× zoom is still open. 2D tilt/zoom reset when switching modes (not persisted; not asked for).
+- (answered 03:05: yes, pinned at the left edge in 2D; see the entry above)
+- Still to do: vault copies of mockups v4 to v8 and decision-log entries; delete `.verify-screenshots/` (untracked, don't commit).
+
+## Toolbox view M2: mockup v8 / v8.1, layout approved (2026-11-25, 02:50)
+
+- New mockup `docs/mockups/toolbox-view-m2-v8-layout.html` (uncommitted). It supersedes v7 for 2D. 2D is the flat SVG map; it **turns on its own** (idle spin, same rate as 3D, pauses while dragging), and drag left/right spins it. 3D is unchanged from v5. three.js now loads only when 3D is opened, so 2D works where the CDN is blocked.
+- Tony's answers this session:
+  - **Layout fix APPROVED:** the Servers panel gets its own column beside the map; the hint and tilt/zoom readout go in a bar under the map. Nothing sits on the map.
+  - **Defaults CONFIRMED:** a down server is a red node with its error line; cold is a grey node; no pulse on tool use in v1; 3D shows servers only.
+  - **2D motion:** "doesn't rotate" meant "turn on its own" (not drag). Added to v8.1.
+  - **Auto-spin approved** (02:46): "The auto-spin is exactly what I want and what it used to be!"
+  - Tony then asked for **tilt and resize in 2D too**. Built in mockup v8.2 (same file): 2D stays a flat SVG (no shaded spheres); drag up or down tilts it from 90° (straight down, the default) to 20°, so the rings become ovals and the labels stay upright; the scroll wheel zooms 0.5× to 2.1× (same direction as 3D); readout "2D · Tilt N° · Zoom N×". Verified in headless Chrome with unpkg blocked: tilt 90° to 40° to 60°, zoom clamps at 0.5× and 2.1×, no errors. **v8.2 is awaiting Tony's approval.**
+- Debug note: the first v8 drew nothing in the Claude preview panel because the panel blocks the unpkg three.js import, which broke the whole module. Reproduced in headless Chrome by blocking unpkg; fixed by the lazy 3D import. The real app bundles three, so this only affected the mockup.
+- VERIFIED (headless Chrome in the cloud workspace, unpkg blocked and unblocked): 2D draws 14 nodes; idle spin 4° to 31° in 4 s; it holds still while the mouse is held; a drag spins it; 3D renders when three loads; the fallback "3D unavailable here, showing 2D." shows when it doesn't. Also seen on Tony's screen: his preview showed "2D · flat · 342°".
+- NOT DONE: no app code changed this session. Vault copy of the mockups and the decision log are still to do.
+- Next: (1) get Tony's approval of v8.2; (2) build 2D idle spin, drag spin, tilt and zoom in `ToolBoxMap.jsx` plus tests; (3) build the layout fix (grid: map column with a bar under it, Servers column); (4) verify in the Tauri app with screenshots; (5) check the remembered 2D/3D choice and the WebGL fallback in the app.
+
+## Toolbox view M2: handoff to a new session (2026-11-25, 02:35)
+
+**Read `docs/handoff-toolbox-view-m2.md` first.** It has the full state, the mockup decisions, the verified list, and the next steps.
+
+- Branch `feature/rigel-toolbox-view`; everything since `1b5621b` is uncommitted. Commit only when Tony asks; push from the Mac.
+- Approved: 3D look (v4), 3D tilt and zoom (v5). Awaiting approval: 2D flat spin (v7). Superseded: v6.
+- Open: the Servers panel and hint/readout overlap in the app; label crowding when zoomed out; the defaults for down servers and tool-use pulse.
+- Verified in the Tauri app: 2D flat map, 3D render, tilt, zoom, spin, and the clipping fix. Not verified: 2D spin (not built yet), the remembered choice after reload, and the WebGL fallback in the app.
+
+## Toolbox view M2: 3D tilt and zoom (2026-11-25, 02:20)
+
+**Branch:** `feature/rigel-toolbox-view` · **Not committed.** Commit when Tony asks.
+
+- Tony approved the tilt and zoom mockup: "Use this mockup. This is more like what I expect." Saved: `docs/mockups/toolbox-view-m2-v5-tilt.html`.
+- Decisions (Tony): drag up or down tilts (flat about 85° to edge-on about 5°; up tilts toward flat); drag left or right spins; scroll wheel zooms (about 0.5× whole map to about 2.1× close up); readout bottom right shows tilt and zoom; default tilt 27°. No reset button.
+- BUILT (uncommitted): `desktop/src/toolboxScene.js` (tilt and zoom limits, camera position, wheel zoom); `desktop/src/components/ToolBoxScene.jsx` (the orbit stays flat, the camera moves; drag and wheel handlers; readout and hint); `desktop/src/styles.css` (`.tb-scene-readout`, `.tb-scene-hint`); `desktop/src/__tests__/toolboxScene.test.js` (7 tests).
+- VERIFIED: `npx vitest run` in `desktop/`: 4 files, 41 tests pass (Linux VM). `npx vite build --outDir /tmp/rigel-build-check` passes.
+- FIXED: rollup's Linux binary was missing from `node_modules` (only the macOS binary was installed). `npm install` restored it. The lockfile was fine.
+- NOT VERIFIED: tilt, zoom and the readout in a real browser with WebGL. Test on the Mac with `npm run dev`.
+- Vault copy of the v4 and v5 mockups and the decision log are still to do.
+
+## Toolbox view M2: 3D rebuilt with WebGL (three.js) (2026-11-25)
+
+**Branch:** `feature/rigel-toolbox-view` · **Not committed.** Commit when Tony asks.
+
+- Tony approved the 3D look: "That looks amazing." Mockup saved: `docs/mockups/toolbox-view-m2-v4-webgl.html` (uncommitted; the vault copy is still to do, as the vault is not reachable from this session).
+- Tony chose WebGL (three.js) over CSS 3D. The old SVG orbit (`orbitPoint`, `orbitNodes`, `depthScale`, `TILT`, `PERSPECTIVE`) is removed; it never looked three-dimensional.
+- BUILT (uncommitted):
+  - `desktop/package.json` + `package-lock.json`: `three` ^0.170.0 (lock diff is only the three entries).
+  - `desktop/src/toolboxView.js`: `supports3D()` now checks for a WebGL context (was CSS 3D); `ringFor` moved here, shared by both views.
+  - `desktop/src/toolboxScene.js` (new): `scenePositions(rows)`, ring radii, tilt.
+  - `desktop/src/components/ToolBoxScene.jsx` (new): three.js scene. One renderer per mount; nodes rebuilt only when server data or hub state changes; labels are HTML over the canvas; drag to spin; idle spin; disposes on unmount; calls `onFail` if WebGL won't start.
+  - `desktop/src/components/ToolBoxMap.jsx`: 3D uses the scene; 2D SVG is unchanged. A WebGL failure shows "3D unavailable here, showing 2D.".
+  - `desktop/src/styles.css`: `.tb-scene*` rules.
+  - `desktop/src/__tests__/ToolBoxMap.test.jsx`: SVG orbit tests replaced. New: shared scene positions, WebGL check, 3D fallback, 3D draws labels (renderer stubbed via `vi.mock("three")`), 2D never builds the scene.
+- VERIFIED: `npx vitest run` in `desktop/`: 3 files, 34 tests pass (run in the connected Linux VM, not on the Mac host). `npx vite build --outDir /tmp/rigel-build-check` passes.
+- NOT VERIFIED: the 3D scene in a real browser/WebGL context; the 2D view in the running app with the 14 live servers; the 2D/3D toggle live. jsdom has no WebGL, so the scene is only proven to mount with a stubbed renderer.
+- NOTE: `vite build` into `desktop/dist` fails here (cannot delete old files without delete permission). Use `--outDir` outside the repo, or build on the Mac.
+- NOTE: the JS bundle is now ~757 kB (three.js). Vite warns above 500 kB. Consider lazy-loading `ToolBoxScene` (`React.lazy`) later.
+- Decisions taken (Tony did not confirm them): 3D shows servers only (no Rigel / other-agent boxes, as in mockup v4); 2D stays the flat SVG (the choice in the earlier question was not answered; default kept); down server = red node + error line; cold = neutral grey; no pulse on tool use in v1.
+- Next steps: (1) run `npm install` and `npm test` on the Mac; (2) run `npm run dev`, open the Toolbox view, and check 3D in a real window (drag, toggle, labels, error line for `image-tools`, fallback); (3) decide whether Rigel and the other agent should appear in 3D; (4) save the vault mockup copy and a decision-log entry; (5) commit and push from the Mac when Tony asks.
+
 ## Toolbox view M2: built, NOT verified, live data blocked (2026-11-23 03:40)
 
 **Branch:** `feature/rigel-toolbox-view` (from `ec50782`, the View Screens P2 branch; NOT from the speaker-verification HEAD) · **Not committed.** Commit when Tony asks.

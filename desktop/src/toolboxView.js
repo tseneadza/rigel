@@ -16,10 +16,20 @@ export function stateTone(state) {
   return "neutral";
 }
 
-/** Whether this runtime can render the 3D map (CSS 3D transforms). */
+/** Whether this runtime can start WebGL (needed for the 3D scene). */
 export function supports3D() {
-  if (typeof CSS === "undefined" || typeof CSS.supports !== "function") return false;
-  return CSS.supports("transform-style", "preserve-3d") && CSS.supports("transform", "rotateX(1deg)");
+  try {
+    const c = document.createElement("canvas");
+    return Boolean(c.getContext("webgl2") || c.getContext("webgl"));
+  } catch {
+    return false;
+  }
+}
+
+/** ToolBox states that sit on the inner ring. Every other state sits on the outer ring. */
+const INNER_STATES = new Set(["running", "starting", "stopping"]);
+export function ringFor(state) {
+  return INNER_STATES.has(state) ? "inner" : "outer";
 }
 
 /** Remembered choice from localStorage: "2d" (default) or "3d". */

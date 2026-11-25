@@ -14,7 +14,8 @@
   "dependencies": {
     "@tauri-apps/plugin-global-shortcut": "^2.3.2",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "three": "^0.170.0"
   },
   "devDependencies": {
     "@tauri-apps/api": "^2.11.1",

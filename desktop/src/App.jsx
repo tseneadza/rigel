@@ -618,7 +618,12 @@ export default function App() {
       </main>
 
       {/* Kept mounted (just hidden) while minimized so an in-flight send isn't torn down mid-request. */}
-      <footer className="dock" style={minimized ? { display: "none" } : undefined}>
+      {/* Non-chat views show only their own content (Toolbox replaces the chat, mockup v2).
+          Kept mounted (just hidden) so an in-flight send isn't torn down. */}
+      <footer
+        className="dock"
+        style={minimized || activeView !== "chat" ? { display: "none" } : undefined}
+      >
         <ChatConsole
           turns={turns}
           onExchange={handleExchange}

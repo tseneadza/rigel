@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rigel · Toolbox view M2 · v4 (WebGL 3D mockup)</title>
+<style>
+  :root { --bg:#0b0d12; --panel:#12151c; --line:#262b36; --text:#e7eaf0; --muted:#8b93a5;
+          --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; --neutral:#64748b; --hub:#60a5fa; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.4 -apple-system,system-ui,sans-serif; }
+  header { display:flex; align-items:center; justify-content:space-between; padding:12px 18px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:15px; margin:0; font-weight:600; }
+  .mode { display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .mode button { background:none; color:var(--muted); border:0; padding:6px 14px; cursor:pointer; font:inherit; }
+  .mode button[aria-pressed="true"] { background:#1f2636; color:var(--text); }
+  main { display:grid; grid-template-columns: 1fr 260px; height: calc(100vh - 53px); }
+  #stage { position:relative; overflow:hidden; cursor:grab; }
+  #stage:active { cursor:grabbing; }
+  #stage canvas { display:block; width:100%; height:100%; }
+  .label { position:absolute; transform:translate(-50%, -135%); font-size:12px; white-space:nowrap; pointer-events:none; color:var(--text); text-shadow:0 1px 2px #000; }
+  .label small { display:block; color:var(--muted); font-size:11px; }
+  .label.bad small { color:var(--bad); }
+  .hint { position:absolute; left:14px; bottom:12px; color:var(--muted); font-size:12px; }
+  aside { background:var(--panel); border-left:1px solid var(--line); padding:16px; overflow:auto; }
+  aside h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:18px 0 8px; font-weight:600; }
+  aside h2:first-child { margin-top:0; }
+  .row { display:flex; justify-content:space-between; padding:4px 0; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
+  .err { color:var(--bad); font-size:12px; }
+  .fallback { color:var(--warn); font-size:12px; display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Toolbox</h1>
+  <div class="mode" role="group" aria-label="View mode">
+    <button id="m2" aria-pressed="true">2D</button>
+    <button id="m3" aria-pressed="false">3D</button>
+  </div>
+</header>
+<main>
+  <section id="stage">
+    <div id="labels"></div>
+    <div class="hint" id="hint">Drag to rotate. Mockup sample data, 8 of 14 servers shown.</div>
+  </section>
+  <aside>
+    <h2>Summary</h2>
+    <div class="row"><span>Running</span><span id="c-run">0</span></div>
+    <div class="row"><span>Starting / stopping</span><span id="c-ss">0</span></div>
+    <div class="row"><span>Not running</span><span id="c-nr">0</span></div>
+    <div class="row"><span>Tools available</span><span id="c-tools">0</span></div>
+    <h2>Errors</h2>
+    <div id="errs"></div>
+    <div class="fallback" id="fb">3D unavailable here, showing 2D.</div>
+  </aside>
+</main>
+
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.170.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from "three";
+
+// Illustrative sample. States use ToolBox labels: running, starting, stopping, not running, cold.
+const SERVERS = [
+  { name:"osa-system",            state:"running",     tools:21, error:null },
+  { name:"gmail",                 state:"running",     tools:14, error:null },
+  { name:"agentic-dev",           state:"starting",    tools:9,  error:null },
+  { name:"image-tools",           state:"running",     tools:18, error:"Timed out on last call" },
+  { name:"excalidraw-architect-mcp", state:"cold",     tools:12, error:null },
+  { name:"claude-code-usage",     state:"cold",        tools:7,  error:null },
+  { name:"ai-image-detector",     state:"not running", tools:6,  error:"Process exited (code 1)" },
+  { name:"git",                   state:"cold",        tools:10, error:null },
+];
+const INNER = new Set(["running","starting","stopping"]);
+const TONE = { running:"#4ade80", starting:"#fbbf24", stopping:"#fbbf24", "not running":"#f87171", cold:"#64748b" };
+
+// Counts and side panel
+const c = (f) => SERVERS.filter(f).length;
+document.getElementById("c-run").textContent = c(s => s.state === "running");
+document.getElementById("c-ss").textContent  = c(s => s.state === "starting" || s.state === "stopping");
+document.getElementById("c-nr").textContent  = c(s => s.state === "not running");
+document.getElementById("c-tools").textContent = SERVERS.reduce((a,s)=>a+s.tools,0);
+document.getElementById("errs").innerHTML = SERVERS.filter(s=>s.error)
+  .map(s => `<div class="err">${s.name}: ${s.error}</div>`).join("") || "<div class='row'>None</div>";
+
+// Scene
+const stage = document.getElementById("stage");
+const labels = document.getElementById("labels");
+const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+stage.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+const orbit = new THREE.Group();          // holds rings, nodes, spokes; tilted once
+orbit.rotation.x = -0.55;
+scene.add(orbit);
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+const key = new THREE.DirectionalLight(0xffffff, 0.9); key.position.set(3,6,4); scene.add(key);
+
+const INNER_R = 2.2, OUTER_R = 3.6;
+// Hub
+const hub = new THREE.Mesh(new THREE.SphereGeometry(0.55, 40, 40),
+  new THREE.MeshStandardMaterial({ color:0x60a5fa, emissive:0x1e3a8a, roughness:0.35, metalness:0.1 }));
+orbit.add(hub);
+// Rings (visible from above and at the tilt)
+function ring(r, opacity){
+  const m = new THREE.Mesh(new THREE.TorusGeometry(r, 0.012, 8, 180),
+    new THREE.MeshBasicMaterial({ color:0x334155, transparent:true, opacity }));
+  m.rotation.x = Math.PI/2; orbit.add(m);
+}
+ring(INNER_R, 0.9); ring(OUTER_R, 0.6);
+
+// Place nodes
+const nodes = [];
+const inner = SERVERS.filter(s => INNER.has(s.state));
+const outer = SERVERS.filter(s => !INNER.has(s.state));
+function place(list, r, offset){
+  list.forEach((s,i) => {
+    const a = offset + (i*2*Math.PI)/Math.max(list.length,1);
+    const pos = new THREE.Vector3(r*Math.cos(a), 0, r*Math.sin(a));
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.17, 28, 28),
+      new THREE.MeshStandardMaterial({ color:TONE[s.state]||TONE.cold, emissive:TONE[s.state]||TONE.cold, emissiveIntensity:0.25, roughness:0.4 }));
+    mesh.position.copy(pos); orbit.add(mesh);
+    const spoke = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), pos]),
+      new THREE.LineBasicMaterial({ color:0x334155, transparent:true, opacity:0.8 }));
+    orbit.add(spoke);
+    const el = document.createElement("div");
+    el.className = "label" + (s.error ? " bad" : "");
+    el.innerHTML = `${s.name}<small>${s.state}${s.error ? " · error" : ""}</small>`;
+    labels.appendChild(el);
+    nodes.push({ s, mesh, el, pos });
+  });
+}
+place(inner, INNER_R, 0);
+place(outer, OUTER_R, Math.PI/Math.max(outer.length,1));
+
+// Hub label
+const hubEl = document.createElement("div");
+hubEl.className = "label"; hubEl.innerHTML = "ToolBox<small>hub</small>"; labels.appendChild(hubEl);
+
+// Mode
+let mode = localStorage.getItem("rigel.toolboxView") || "2d";
+let spin = -0.6;           // orbit.rotation.y, set by drag or slow idle spin
+let drag = null;
+function setMode(m){
+  mode = m;
+  localStorage.setItem("rigel.toolboxView", m);
+  document.getElementById("m2").setAttribute("aria-pressed", m==="2d");
+  document.getElementById("m3").setAttribute("aria-pressed", m==="3d");
+  // 2D = top-down orthographic-looking view; 3D = tilted perspective
+  if (m === "2d") { orbit.rotation.x = -Math.PI/2; } else { orbit.rotation.x = -0.55; }
+}
+document.getElementById("m2").onclick = () => setMode("2d");
+document.getElementById("m3").onclick = () => setMode("3d");
+
+// Drag to rotate around the hub (spin only; tilt stays fixed in 3D)
+stage.addEventListener("pointerdown", e => { drag = e.clientX; });
+window.addEventListener("pointerup", () => { drag = null; });
+window.addEventListener("pointermove", e => { if (drag !== null) { spin += (e.clientX - drag)*0.008; drag = e.clientX; } });
+
+function resize(){
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false);
+  renderer.domElement.style.width = w+"px"; renderer.domElement.style.height = h+"px";
+  camera.aspect = w/h; camera.updateProjectionMatrix();
+  camera.position.set(0, mode==="2d" ? 9 : 4.6, mode==="2d" ? 0.001 : 9);
+  camera.lookAt(0,0,0);
+}
+addEventListener("resize", resize);
+
+const v = new THREE.Vector3();
+function frame(){
+  if (drag === null) spin += 0.002;     // slow idle turn
+  orbit.rotation.y = spin;
+  orbit.updateMatrixWorld(true);
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.render(scene, camera);
+  // Labels track each node's projected position
+  const project = (p) => { v.copy(p).applyMatrix4(orbit.matrixWorld).project(camera); return [(v.x+1)/2*w, (1-v.y)/2*h]; };
+  for (const n of nodes) { const [x,y] = project(n.pos); n.el.style.left = x+"px"; n.el.style.top = y+"px"; }
+  const [hx,hy] = project(new THREE.Vector3(0,0,0)); hubEl.style.left = hx+"px"; hubEl.style.top = hy+"px";
+  requestAnimationFrame(frame);
+}
+
+// WebGL check, fallback to 2D with reason
+let webgl = false;
+try { webgl = !!document.createElement("canvas").getContext("webgl2"); } catch {}
+if (!webgl && mode === "3d") { setMode("2d"); document.getElementById("fb").style.display = "block"; }
+resize(); setMode(mode);
+frame();
+</script>
+</body>
+</html>
